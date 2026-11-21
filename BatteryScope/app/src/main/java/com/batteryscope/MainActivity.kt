@@ -911,5 +911,6 @@ class MainActivity : Activity() {
 
     companion object {
         private const val SHIZUKU_REQUEST_CODE = 4102
+        private const val LINK_POLL_INTERVAL_MS = 2000L
     }
 }
