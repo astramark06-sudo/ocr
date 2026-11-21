@@ -133,7 +133,7 @@ class MainActivity : Activity() {
         "charge_control_limit", "charge_control_limit_max",
         "charge_control_start_threshold", "charge_control_end_threshold",
         "current_limit", "voltage_limit", "max_voltage", "max_current",
-        "fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update"
+        "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update", "mmi_charging_enable", "stop_charging_enable", "chargerid_volt", "charger_ic", "usb_status", "typec_cc_orientation", "typec_sbu_voltage"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -383,7 +383,7 @@ class MainActivity : Activity() {
             appendLine()
             appendLine("OPLUS / VOOC DRIVER STATE")
             val voocLines = report.lineSequence().filter { line ->
-                listOf("/fast_charge", "/voocchg_ing", "/charge_technology", "/adapter_fw_update")
+                listOf("/fastcharger", "/fast_chg_type", "/voocchg_ing", "/charge_technology", "/adapter_fw_update", "/mmi_charging_enable", "/stop_charging_enable")
                     .any { line.contains(it) }
             }.toList()
             if (voocLines.isEmpty()) {
@@ -393,10 +393,13 @@ class MainActivity : Activity() {
                     val property = line.substringBefore(" = ").substringAfterLast("/")
                     val raw = line.substringAfter(" = ", "unknown").substringBefore("  [")
                     val meaning = when (property) {
-                        "fast_charge" -> "Oplus fast-charge UI indicator"
+                        "fastcharger" -> "Oplus VOOC fast-charge UI indicator"
+                        "fast_chg_type" -> "driver-reported charger subtype; raw enum"
                         "voocchg_ing" -> "Oplus VOOC driver fast-charge-in-progress flag"
                         "charge_technology" -> "vendor project enum; interpretation intentionally omitted"
                         "adapter_fw_update" -> "adapter firmware update state; enum interpretation omitted"
+                        "mmi_charging_enable" -> "vendor charge enable state; read only, never written"
+                        "stop_charging_enable" -> "vendor stop-charge state; read only, never written"
                         else -> "raw driver property"
                     }
                     appendLine("$property = $raw  [$meaning]")
@@ -610,8 +613,11 @@ class MainActivity : Activity() {
     private fun formatSupplyValue(key: String, raw: String): String {
         val field = key.substringAfter('/')
         val number = raw.toLongOrNull()
-        val vendorRawOnly = field in setOf("fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update") ||
-            (key.startsWith("battery/") && field == "current_max")
+        val vendorRawOnly = field in setOf(
+            "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology",
+            "adapter_fw_update", "mmi_charging_enable", "stop_charging_enable",
+            "chargerid_volt", "charger_ic", "usb_status", "typec_cc_orientation", "typec_sbu_voltage"
+        ) || (key.startsWith("battery/") && field == "current_max")
         val converted = if (vendorRawOnly) null else when (field) {
             "voltage_now", "voltage_avg", "voltage_max", "voltage_min",
             "input_voltage_limit", "constant_charge_voltage", "constant_charge_voltage_max", "voltage_limit", "max_voltage" ->
@@ -628,7 +634,10 @@ class MainActivity : Activity() {
             else -> null
         }
         val annotation = when (field) {
-            "fast_charge" -> "  [vendor boolean; VOOC UI indicator]"
+            "fastcharger" -> "  [vendor boolean; VOOC UI indicator]"
+            "fast_chg_type" -> "  [vendor subtype enum; raw value only]"
+            "mmi_charging_enable" -> "  [vendor state; read only; no write]"
+            "stop_charging_enable" -> "  [vendor state; read only; no write]"
             "voocchg_ing" -> "  [vendor boolean; VOOC in-progress state]"
             "charge_technology" -> "  [vendor enum; raw value only]"
             "adapter_fw_update" -> "  [vendor state; raw value only]"
