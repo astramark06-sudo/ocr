@@ -30,6 +30,7 @@ class MainActivity : Activity() {
     private lateinit var chargerText: TextView
     private lateinit var diagnosticText: TextView
     private lateinit var communicationText: TextView
+    private lateinit var liveLinkText: TextView
     private lateinit var controlText: TextView
     private lateinit var coolDownStatusText: TextView
     private lateinit var statusText: TextView
@@ -38,6 +39,8 @@ class MainActivity : Activity() {
     private val coolDownButtons = mutableListOf<Button>()
     private var currentCoolDownLevel: Int? = null
     private var coolDownNodeWritable = false
+    private var linkPollInFlight = false
+    private var latestLinkSnapshot = ""
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var logging = false
@@ -81,6 +84,8 @@ class MainActivity : Activity() {
         runOnUiThread {
             remoteService = null
             serviceBindingRequested = false
+            handler.removeCallbacks(linkSampler)
+            if (::liveLinkText.isInitialized) liveLinkText.text = "Shizuku disconnected. Live link polling stopped."
             if (::communicationText.isInitialized) {
                 setBridgeStatus("Shizuku service disconnected. Restart Shizuku and scan again.")
             }
@@ -98,6 +103,32 @@ class MainActivity : Activity() {
             remoteService = null
             serviceBindingRequested = false
             runOnUiThread { setBridgeStatus("Diagnostic service disconnected.") }
+        }
+    }
+
+    private val linkSampler = object : Runnable {
+        override fun run() {
+            val service = remoteService ?: return
+            if (linkPollInFlight) {
+                handler.postDelayed(this, LINK_POLL_INTERVAL_MS)
+                return
+            }
+            linkPollInFlight = true
+            Thread {
+                val snapshot = try {
+                    service.snapshotLink()
+                } catch (t: Throwable) {
+                    "LIVE SNAPSHOT FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+                }
+                runOnUiThread {
+                    linkPollInFlight = false
+                    if (remoteService != null && !isFinishing) {
+                        latestLinkSnapshot = snapshot
+                        liveLinkText.text = buildLiveLinkSummary(snapshot)
+                        handler.postDelayed(this, LINK_POLL_INTERVAL_MS)
+                    }
+                }
+            }.start()
         }
     }
 
@@ -156,10 +187,12 @@ class MainActivity : Activity() {
         handler.removeCallbacks(sampler)
         handler.post(sampler)
         updateShizukuAvailability()
+        if (remoteService != null) startLiveLinkPolling()
     }
 
     override fun onPause() {
         handler.removeCallbacks(sampler)
+        handler.removeCallbacks(linkSampler)
         super.onPause()
     }
 
@@ -196,8 +229,19 @@ class MainActivity : Activity() {
 
         batteryText = addPanel(content, "01  BATTERY TELEMETRY  •  ANDROID FRAMEWORK")
         chargerText = addPanel(content, "02  POWER SUPPLY NODES  •  KERNEL")
-        communicationText = addPanel(content, "03  PHONE ↔ CHARGER COMMUNICATION")
-        communicationText.text = "Not scanned. Start Shizuku and run the privileged audit to inspect Type-C roles, USB-PD data, Oplus VOOC driver state and charger-side telemetry when the kernel exposes it."
+        communicationText = addPanel(content, "03  PHONE ↔ CHARGER COMMUNICATION  •  FULL AUDIT")
+        communicationText.text = "Not scanned. Start Shizuku and run the full audit for Type-C role, USB-PD capability, charger supply nodes and Oplus VOOC driver state."
+        val liveLabel = TextView(this).apply {
+            text = "LIVE POWER-PATH SAMPLE  •  2 SECOND POLL"
+            textSize = 10f
+            setTextColor(Color.rgb(123, 177, 242))
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(2, 14, 2, 7)
+        }
+        content.addView(liveLabel)
+        liveLinkText = makeText(11f, Color.rgb(230, 237, 247), true)
+        liveLinkText.text = "Waiting for Shizuku. Live USB / VOOC driver attributes are not yet available."
+        content.addView(liveLinkText)
         controlText = addPanel(content, "04  OPLUS INPUT-CURRENT LIMITER  •  CONDITIONAL")
         controlText.text = "Waiting for device audit. The possible control is the Oplus cool_down driver interface, not a USB-PD/VOOC protocol command."
         coolDownStatusText = makeText(11f, Color.rgb(225, 231, 241), false)
@@ -365,6 +409,10 @@ class MainActivity : Activity() {
                 communicationText.text = buildCommunicationSummary(report)
                 controlText.text = buildControlSummary(report)
                 updateCoolDownControls(report)
+                liveLinkText.text = if (latestLinkSnapshot.isBlank()) {
+                    "Full audit complete. Starting live power-path polling…"
+                } else buildLiveLinkSummary(latestLinkSnapshot)
+                startLiveLinkPolling()
                 diagnosticText.text = buildString {
                     appendLine("Shizuku service: connected")
                     appendLine("Privileged scan: completed")
