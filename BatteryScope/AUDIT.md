@@ -60,16 +60,19 @@ Relevant files:
 - drivers/power/oplus/charger_ic/oplus_battery_mtk6785.c
 
 This source family lists the following battery power-supply properties:
-- FAST_CHARGE
-- VOOCCHG_ING
-- CHARGE_TECHNOLOGY
-- ADAPTER_FW_UPDATE
+- FAST_CHARGE (published as the sysfs attribute `fastcharger` in the inspected `power_supply_sysfs.c`)
+- VOOCCHG_ING (published as `voocchg_ing`)
+- CHARGE_TECHNOLOGY (published as `charge_technology`)
+- ADAPTER_FW_UPDATE (published as `adapter_fw_update`)
+- FAST_CHG_TYPE (published as `fast_chg_type` on the USB power-supply node in the MTK USB driver)
 
 The reference implementation maps:
-- fast_charge to oplus_chg_show_vooc_logo_ornot(), a VOOC-related fast-charge UI/driver indicator. It may include transition or warm-state conditions; it is not a measured wattage or USB contract.
-- voocchg_ing to oplus_vooc_get_fastchg_ing(), which returns the driver's fastchg_ing state. This is the clearest driver state indicator in the inspected source, but it still does not report electrical VBUS/IBUS.
-- charge_technology to chip->vooc_project, a vendor project value. It is retained as a raw enum.
-- adapter_fw_update to the vendor adapter firmware update state. It is retained raw.
+- `fastcharger` / `POWER_SUPPLY_PROP_FAST_CHARGE` to `oplus_chg_show_vooc_logo_ornot()`, a VOOC-related fast-charge UI/driver indicator. It may include transition or warm-state conditions; it is not a measured wattage or USB contract.
+- `voocchg_ing` to `oplus_vooc_get_fastchg_ing()`, which returns the driver's fastchg_ing state. This is the clearest driver state indicator in the inspected source, but it still does not report electrical VBUS/IBUS.
+- `charge_technology` to `chip->vooc_project`, a vendor project value. It is retained as a raw enum.
+- `adapter_fw_update` to the vendor adapter firmware update state. It is retained raw.
+
+The MTK USB driver also publishes `fast_chg_type`, returning the VOOC fast-charger subtype when active or a charger-subtype value from the charger IC. BatteryScope retains the integer and path as raw driver evidence rather than guessing the enum mapping.
 
 These properties are included in the diagnostic allowlist. Their presence and read permissions must still be confirmed on the exact installed RMX2161 firmware. The community kernel source is a reference baseline, not proof that every property exists in every production firmware build.
 
