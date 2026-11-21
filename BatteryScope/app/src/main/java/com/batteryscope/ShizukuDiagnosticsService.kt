@@ -55,8 +55,8 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine("No attributes were written. Writable status is an access check only, not proof that changing a value is safe.")
         appendLine("Oplus kernel-source audit targets (when exposed by this firmware): battery/fastcharger, battery/voocchg_ing, battery/charge_technology, battery/adapter_fw_update and usb/fast_chg_type.")
         appendLine("fastcharger is the Oplus VOOC fast-charge UI indicator; voocchg_ing reads the driver fastchg_ing state. Neither reports USB VBUS/IBUS or the exact adapter contract.")
-        appendLine("fast_chg_type is a driver-reported charger subtype code; BatteryScope preserves it raw. Vendor enums/status values are not guessed.
-        appendLine("mmi_charging_enable and stop_charging_enable are read-only observations in this app; no write is attempted.")")
+        appendLine("fast_chg_type is a driver-reported charger subtype code; BatteryScope preserves it raw. Vendor enums/status values are not guessed.")
+        appendLine("mmi_charging_enable and stop_charging_enable are read-only observations in this app; no write is attempted.")
         appendLine("No USB role, voltage, current limit, charging mode, or protocol negotiation was changed.")
         appendLine("A missing node means not exposed at this path; it does not prove the hardware lacks that capability.")
     }
