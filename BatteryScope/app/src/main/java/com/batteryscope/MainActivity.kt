@@ -352,6 +352,7 @@ class MainActivity : Activity() {
             "power_role", "data_role", "port_type", "power_operation_mode", "online",
             "usb_power_delivery_revision", "usb_typec_revision", "usb_type",
             "real_type", "charge_type", "voltage_now", "current_now",
+            "fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update",
             "input_current_limit", "input_voltage_limit", "source-capabilities",
             "sink-capabilities", "maximum_current", "operational_current"
         )
@@ -370,7 +371,7 @@ class MainActivity : Activity() {
         }.distinct().take(45).toList()
 
         return buildString {
-            appendLine("LIVE LINK / NEGOTIATION EVIDENCE")
+            appendLine("LATEST POWER-PATH SNAPSHOT • tap audit again to refresh")
             if (matches.isEmpty()) {
                 appendLine("No readable Type-C role, USB-PD, charger-type or VBUS/IBUS kernel fields were returned.")
                 appendLine("Result: link-level protocol negotiation is NOT OBSERVED by this scan.")
@@ -382,8 +383,10 @@ class MainActivity : Activity() {
             appendLine("Interpretation limits")
             appendLine("• BatteryScope can report only interfaces published by this phone's kernel/firmware.")
             appendLine("• USB-PD PDO data, if present, is USB-PD evidence; it is not proof of SuperDart negotiation.")
-            appendLine("• Proprietary SuperDart/VOOC handshake packets are not decoded unless Realme exposes a driver interface for them.")
+            appendLine("• Oplus VOOC state properties, when exposed, are driver state values, not captured electrical packets.")
+            appendLine("• USB-PD PDO values show advertised capabilities, not necessarily the selected active contract.")
             appendLine("• The app does not transmit protocol requests or alter the negotiated profile.")
+            appendLine("• This is an on-demand snapshot, not a continuous packet trace or oscilloscope.")
             appendLine()
             appendLine("FULL RAW SCAN")
             append(report)
