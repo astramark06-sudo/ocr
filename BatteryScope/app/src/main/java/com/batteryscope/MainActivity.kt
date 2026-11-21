@@ -364,6 +364,7 @@ class MainActivity : Activity() {
                 latestDiagnosticTimeMs = System.currentTimeMillis()
                 communicationText.text = buildCommunicationSummary(report)
                 controlText.text = buildControlSummary(report)
+                updateCoolDownControls(report)
                 diagnosticText.text = buildString {
                     appendLine("Shizuku service: connected")
                     appendLine("Privileged scan: completed")
@@ -449,35 +450,130 @@ class MainActivity : Activity() {
     }
 
     private fun buildControlSummary(report: String): String {
-        val candidates = report.lineSequence().filter { line ->
-            val lower = line.lowercase(Locale.US)
-            val isChargeLimit = lower.contains("charge_control_limit") ||
-                lower.contains("input_current_limit") ||
-                lower.contains("input_voltage_limit") ||
-                lower.contains("input_power_limit")
-            isChargeLimit && lower.contains("dac access check: readable and writable")
-        }.toList()
+        val present = report.contains("Present: true")
+        val readable = report.contains("Readable: true")
+        val writable = report.contains("ADB-shell process canWrite(): true")
+        val current = report.lineSequence()
+            .firstOrNull { it.startsWith("Current driver level:") }
+            ?.substringAfter(":")?.trim()
         return buildString {
-            appendLine("CONTROL STATUS: LOCKED")
-            appendLine("No write operation has been attempted.")
-            if (candidates.isEmpty()) {
-                appendLine("No charge-limit attribute reported DAC-level write access by the privileged scanner.")
+            appendLine("Oplus COOL_DOWN node: \${if (present) "PRESENT" else "NOT EXPOSED"}")
+            appendLine("ADB-shell read access: \${if (readable) "YES" else "NO"}")
+            appendLine("ADB-shell write access: \${if (writable) "YES (permission check only)" else "NO"}")
+            appendLine("Current driver level: \${current ?: "UNAVAILABLE"}")
+            appendLine("Accepted reference levels: 0 (restore OEM defaults), 1..6 (input-current limit steps)")
+            appendLine("No value is written during a scan.")
+            if (!present) {
+                appendLine("The installed kernel did not expose /sys/class/power_supply/battery/cool_down at the audited path. No control is available through this interface.")
+            } else if (!writable) {
+                appendLine("The node exists but the Shizuku process cannot write it. Shizuku is ADB-shell privilege, not root; controls remain disabled.")
+            } else if (current?.toIntOrNull()?.let { it in 0..6 } != true) {
+                appendLine("The live value is outside the source-verified 0..6 range. Controls remain disabled.")
             } else {
-                appendLine("Potential writable charge-limit candidates (permission-bit observation only):")
-                candidates.forEach { appendLine(it) }
-                appendLine("These are NOT verified safe controls. SELinux, driver validation, allowed ranges and charging side-effects are not established.")
+                appendLine("The bounded driver interface appears writable to this process. The app still requires an explicit confirmation, charging-state check and exact read-back after any user-requested change.")
             }
             appendLine()
-            appendLine("Known unsafe Oplus control from the examined RM6785 source: MMI_CHARGING_ENABLE is binary charging enable/disable; its setter turns charging off/on and can stop VOOC. It is not a current-limit control, so this app never writes it.")
+            appendLine("Reference driver table (normal / VOOC input cap):")
+            appendLine("L1 500 / 1000 mA; L2 900 / 1500 mA; L3 1200 / 2000 mA; L4 1500 / 2500 mA; L5 2000 / 3000 mA; L6 2000 / 3500 mA.")
+            appendLine("These are limits in the inspected RM6785 source, not measured current, USB-C voltage/current or the active negotiated contract. Installed firmware may differ.")
             appendLine()
-            appendLine("Controls deliberately excluded:")
-            appendLine("• USB-C power-role or data-role switching")
-            appendLine("• Raw I²C / PMIC writes")
-            appendLine("• Proprietary SuperDart protocol commands")
-            appendLine("• Unbounded sysfs writes")
-            appendLine()
-            appendLine("A real charging control requires a documented RMX2161 driver interface, valid range/min/max metadata, read-after-write verification and a safe rollback. No generic control slider is exposed without that evidence.")
+            appendLine("Known unsafe Oplus control: MMI_CHARGING_ENABLE is binary charge enable/disable; its setter can turn charging off and end VOOC. It is excluded.")
+            appendLine("STOP_CHARGING_ENABLE and OTG_SWITCH are also excluded; they do not provide a safe current-rate control.")
+            appendLine("No USB-C role change, PMIC/I²C write, or raw SuperDart protocol command is available in this app.")
         }
+    }
+
+    private fun updateCoolDownControls(report: String) {
+        val present = report.contains("Present: true")
+        val readable = report.contains("Readable: true")
+        val writable = report.contains("ADB-shell process canWrite(): true")
+        val rawLevel = report.lineSequence()
+            .firstOrNull { it.startsWith("Current driver level:") }
+            ?.substringAfter(":")?.trim()
+        val parsedLevel = rawLevel?.toIntOrNull()
+        currentCoolDownLevel = parsedLevel
+        coolDownNodeWritable = present && readable && writable && parsedLevel?.let { it in 0..6 } == true
+        val charging = isChargingAndPlugged()
+        coolDownButtons.forEachIndexed { index, button ->
+            val level = index
+            val name = if (level == 0) "OEM" else "L$level"
+            button.text = if (parsedLevel == level) "$name ✓" else name
+            button.isEnabled = coolDownNodeWritable && charging && remoteService != null
+        }
+        coolDownStatusText.text = when {
+            !present -> "CONTROL UNAVAILABLE: /sys/class/power_supply/battery/cool_down is not exposed by this firmware."
+            !readable -> "CONTROL UNAVAILABLE: cooldown node is present but unreadable to Shizuku."
+            !writable -> "READ-ONLY: cooldown node is visible, but the Shizuku ADB-shell UID has no write permission. Root or an OEM privileged service would be required; controls are locked."
+            parsedLevel?.let { it in 0..6 } != true -> "LOCKED: live driver level '$rawLevel' is outside the source-verified 0..6 range."
+            !charging -> "CONTROL DETECTED BUT LOCKED: connect a charger and wait until Android reports CHARGING before applying a limit."
+            remoteService == null -> "CONTROL DETECTED BUT LOCKED: Shizuku diagnostic service is not connected. Run the audit again."
+            else -> "AVAILABLE: driver level $parsedLevel read from the exact sysfs node. Select a level only after reviewing the cap table and confirmation."
+        }
+    }
+
+    private fun isChargingAndPlugged(): Boolean {
+        val intent = batteryIntent() ?: return false
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
+        return status == BatteryManager.BATTERY_STATUS_CHARGING && plugged != 0
+    }
+
+    private fun confirmCoolDownChange(level: Int) {
+        val service = remoteService
+        if (service == null || !coolDownNodeWritable) {
+            coolDownStatusText.text = "LOCKED: the Shizuku service or writable driver node is unavailable."
+            return
+        }
+        if (!isChargingAndPlugged()) {
+            coolDownStatusText.text = "LOCKED: the phone must report CHARGING with an external power source attached."
+            updateCoolDownControls(latestDiagnosticReport)
+            return
+        }
+        if (level !in 0..6) return
+        if (currentCoolDownLevel == level) {
+            coolDownStatusText.text = "No change requested: driver is already at level $level."
+            return
+        }
+        val capDescription = when (level) {
+            0 -> "Restore the OEM driver defaults. This removes the manual cool_down level."
+            1 -> "Request the most restrictive reference cap: normal 500 mA / VOOC 1000 mA input."
+            2 -> "Request reference cap: normal 900 mA / VOOC 1500 mA input."
+            3 -> "Request reference cap: normal 1200 mA / VOOC 2000 mA input."
+            4 -> "Request reference cap: normal 1500 mA / VOOC 2500 mA input."
+            5 -> "Request reference cap: normal 2000 mA / VOOC 3000 mA input."
+            else -> "Request reference cap: normal 2000 mA / VOOC 3500 mA input."
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (level == 0) "Restore OEM charging limits?" else "Apply Oplus input-current limit?")
+            .setMessage(
+                "$capDescription\n\nThis changes only the driver's cool_down limit setting. It does not select a SuperDart/VOOC/USB-PD voltage profile and does not measure the current actually drawn. The phone's firmware may clamp, override or ignore the requested cap. BatteryScope will verify the exact sysfs read-back; it will not report success without that read-back.\n\nProceed?"
+            )
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Apply") { _, _ -> performCoolDownChange(level) }
+            .show()
+    }
+
+    private fun performCoolDownChange(level: Int) {
+        val service = remoteService ?: return
+        coolDownButtons.forEach { it.isEnabled = false }
+        coolDownStatusText.text = "Applying level $level through the exact Oplus driver node and checking read-back…"
+        Thread {
+            val result = try {
+                service.setCoolDown(level)
+            } catch (t: Throwable) {
+                "CONTROL CALL FAILED: \${t.javaClass.simpleName}: \${t.message ?: "unknown"}"
+            }
+            runOnUiThread {
+                controlText.text = result
+                if (result.startsWith("READ-BACK VERIFIED:")) {
+                    coolDownStatusText.text = result
+                    runRemoteDiagnosticScan()
+                } else {
+                    coolDownStatusText.text = result
+                    coolDownButtons.forEach { it.isEnabled = false }
+                }
+            }
+        }.start()
     }
 
     private fun batteryIntent(): Intent? =
