@@ -3,6 +3,9 @@ package com.batteryscope
 import android.app.Activity
 import android.os.BatteryManager
 import android.os.Bundle
+import android.content.pm.PackageManager
+import android.app.AlertDialog
+import rikka.shizuku.Shizuku
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
@@ -108,6 +111,11 @@ class MainActivity : Activity() {
         batteryText = addPanel(content, "BATTERY • ANDROID API")
         chargerText = addPanel(content, "CHARGER / USB • SYSFS READ-ONLY")
         diagnosticText = addPanel(content, "ACCESS & CONTROL DIAGNOSTICS")
+        val shizukuScanButton = Button(this).apply {
+            text = "Scan charger nodes with Shizuku"
+            setOnClickListener { startShizukuScan() }
+        }
+        content.addView(shizukuScanButton, LinearLayout.LayoutParams(-1, -2))
 
         val note = makeText(12f, Color.rgb(150, 164, 184), false).apply {
             text = "Important: battery current is not USB input current. Charger values appear only when the phone kernel exposes readable power-supply attributes. BatteryScope does not write to charging controls or change the phone's charging negotiation."
@@ -140,6 +148,32 @@ class MainActivity : Activity() {
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+    }
+
+    private fun startShizukuScan() {
+        if (!Shizuku.pingBinder()) {
+            AlertDialog.Builder(this).setTitle("Shizuku not running")
+                .setMessage("Open Shizuku, start it using Wireless debugging, then tap this button again.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            Shizuku.requestPermission(4102)
+            AlertDialog.Builder(this).setMessage("Grant BatteryScope access in the Shizuku prompt, then tap the scan button again.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Shizuku scan").setMessage("Scanning read-only power-supply attributes…")
+            .setPositiveButton("Close", null).show()
+        Thread {
+            val result = try { ShizukuDiagnostics.scan() } catch (e: Exception) {
+                "Scan failed: " + e.javaClass.simpleName + ": " + (e.message ?: "unknown error")
+            }
+            runOnUiThread {
+                AlertDialog.Builder(this).setTitle("Shizuku diagnostic results")
+                    .setMessage(result.take(12000)).setPositiveButton("OK", null).show()
+            }
+        }.start()
     }
 
     private fun makeText(size: Float, color: Int, mono: Boolean): TextView =
