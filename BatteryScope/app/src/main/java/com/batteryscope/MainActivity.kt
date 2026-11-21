@@ -946,7 +946,7 @@ class MainActivity : Activity() {
                 val directory = getExternalFilesDir(null) ?: filesDir
                 reportFile = File(directory, "BatteryScope_${timestamp}-diagnostics.txt")
                 reportFile.writeText(
-                    "FULL SHIZUKU AUDIT\\n$latestDiagnosticReport\\n\\nLATEST LIVE POWER-PATH SAMPLE\\n$latestLinkSnapshot\\n\\nCONTROL ACTION HISTORY\\n$controlHistory"
+                    "FULL SHIZUKU AUDIT\n$latestDiagnosticReport\n\nLATEST LIVE POWER-PATH SAMPLE\n$latestLinkSnapshot\n\nCONTROL ACTION HISTORY\n$controlHistory"
                 )
             }
             statusText.text = buildString {
@@ -961,6 +961,11 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         logging = false
+        try {
+            csvWriter?.flush()
+            csvWriter?.close()
+        } catch (_: Throwable) { }
+        csvWriter = null
         handler.removeCallbacks(sampler)
         handler.removeCallbacks(linkSampler)
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
