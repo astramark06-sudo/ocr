@@ -152,8 +152,10 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
     }
 
     override fun setCoolDown(level: Int): String {
-        if (!Build.MODEL.contains("RMX2161", ignoreCase = true)) {
-            return "DENIED: this control is only enabled for the audited RMX2161 model; detected model='" + Build.MODEL + "'."
+        val deviceIdentity = listOf(Build.MODEL, Build.DEVICE, Build.PRODUCT, Build.FINGERPRINT)
+            .joinToString(" | ")
+        if (!deviceIdentity.contains("RMX2161", ignoreCase = true)) {
+            return "DENIED: no RMX2161 identifier found in model/device/product/fingerprint. Detected: " + deviceIdentity
         }
         if (level !in 0..6) return "REJECTED: level must be between 0 and 6."
         val node = File("/sys/class/power_supply/battery/cool_down")
