@@ -1,4 +1,4 @@
-# BatteryScope 1.6 — Engineering Audit
+# BatteryScope 1.7 — Engineering Audit
 
 Audit date: 2026-11-21
 Source revision: telemetry and export correction
@@ -158,6 +158,7 @@ The Oplus setter does not itself validate negative levels in the reference sourc
 - Charge counter is labelled as Android's remaining-charge estimate, not full-charge capacity. Battery health is labelled as Android framework status, not capacity health.
 - Stopping a CSV session opens Android's Storage Access Framework document picker and copies the CSV to the user-selected destination. If export is cancelled or fails, the internal app-specific copy remains.
 - The separate diagnostics text report is still saved in app-specific storage; user-selected export for that report is not yet implemented.
+- An Android 8+ adaptive launcher icon is provided in both standard and round resource variants. The icon uses a dark navy field with a green battery/lightning mark, cyan scope ring and diagnostic waveform. The foreground is vector-based and scales cleanly across launcher densities.
 - Raw vendor enums are not translated without a verified mapping.
 - Battery/BMS quantities are not labelled USB input measurements.
 - PDO advertisements are not labelled an active contract.
