@@ -1,6 +1,7 @@
-# BatteryScope 1.5 — Engineering Audit
+# BatteryScope 1.6 — Engineering Audit
 
 Audit date: 2026-11-21
+Source revision: telemetry and export correction
 Target handset: Realme Narzo 20 Pro, RMX2161, Android 12, non-rooted
 Project branch: batteryscope
 
@@ -153,6 +154,10 @@ The Oplus setter does not itself validate negative levels in the reference sourc
 ## 6. Accuracy, error handling and logging
 
 - Missing values are not displayed as zero.
+- Android battery voltage values outside 2500–5000 mV are retained as raw readings but explicitly marked invalid in the UI and excluded from the battery-side power estimate.
+- Charge counter is labelled as Android's remaining-charge estimate, not full-charge capacity. Battery health is labelled as Android framework status, not capacity health.
+- Stopping a CSV session opens Android's Storage Access Framework document picker and copies the CSV to the user-selected destination. If export is cancelled or fails, the internal app-specific copy remains.
+- The separate diagnostics text report is still saved in app-specific storage; user-selected export for that report is not yet implemented.
 - Raw vendor enums are not translated without a verified mapping.
 - Battery/BMS quantities are not labelled USB input measurements.
 - PDO advertisements are not labelled an active contract.
