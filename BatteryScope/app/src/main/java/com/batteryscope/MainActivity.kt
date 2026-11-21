@@ -12,6 +12,7 @@ import android.graphics.Typeface
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.IBinder
+import android.net.Uri
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
@@ -47,6 +48,7 @@ class MainActivity : Activity() {
     private var logging = false
     private var csvWriter: java.io.BufferedWriter? = null
     private var csvFile: File? = null
+    private var pendingExportFile: File? = null
     private var sessionTimestamp: String? = null
     private var csvSampleCount = 0L
     private var controlHistory = StringBuilder()
@@ -302,7 +304,7 @@ class MainActivity : Activity() {
             setOnClickListener { startLogging() }
         }
         stopButton = Button(this).apply {
-            text = "Stop & export"
+            text = "Stop & export CSV"
             isEnabled = false
             setOnClickListener { stopLogging() }
         }
@@ -790,14 +792,14 @@ class MainActivity : Activity() {
         statusText.text = "${reading.status}   •   ${reading.percent?.let { "$it%" } ?: "--"}   •   POWER SOURCE: ${reading.plugged}"
         batteryText.text = buildString {
             appendLine("Battery level          ${reading.percent?.let { "$it %" } ?: "Unavailable"}")
-            appendLine("Battery voltage        ${reading.rawVoltageMv?.let { "$it mV raw" } ?: "Unavailable"}")
+            appendLine("Battery voltage        ${reading.rawVoltageMv?.let { if (it in 2500..5000) "$it mV raw" else "$it mV raw — INVALID / outside expected battery range" } ?: "Unavailable"}")
             appendLine("Battery current        ${format(currentMa, "mA")}  (${reading.currentUa?.let { "$it µA raw" } ?: "Unavailable"})")
             appendLine("Average current        ${reading.averageCurrentUa?.let { String.format(Locale.US, "%.3f mA (%d µA)", it / 1000.0, it) } ?: "Unavailable"}")
             appendLine("Battery power estimate ${format(estimatedBatteryPowerW, "W")}  [battery-side only]")
-            appendLine("Charge counter         ${reading.chargeCounterUah?.let { "$it µAh / ${String.format(Locale.US, "%.1f mAh", it / 1000.0)}" } ?: "Unavailable"}")
+            appendLine("Remaining-charge counter ${reading.chargeCounterUah?.let { "$it µAh / ${String.format(Locale.US, "%.1f mAh", it / 1000.0)} (Android estimate; not full-charge capacity)" } ?: "Unavailable"}")
             appendLine("Energy counter         ${reading.energyNwh?.let { "$it nWh / ${String.format(Locale.US, "%.3f Wh", it / 1_000_000_000.0)}" } ?: "Unavailable"}")
             appendLine("Temperature            ${format(reading.temperatureC, "°C")}")
-            appendLine("Battery health         ${reading.health}")
+            appendLine("Android battery health ${reading.health} (framework status; not capacity health)")
             append("Technology             ${reading.technology}")
         }
 
@@ -959,12 +961,55 @@ class MainActivity : Activity() {
                 )
             }
             statusText.text = buildString {
-                appendLine(if (file != null) "CSV saved: ${file.name} ($csvSampleCount samples)" else "No CSV file was created.")
-                if (reportFile != null) appendLine("Diagnostics saved: ${reportFile.name}")
+                appendLine(if (file != null) "CSV saved internally: ${file.name} ($csvSampleCount samples)" else "No CSV file was created.")
+                if (reportFile != null) appendLine("Diagnostics saved internally: ${reportFile.name}")
                 if (closeError != null) appendLine("CSV close warning: $closeError")
             }.trim()
+            if (file != null && closeError == null) launchCsvExport(file)
         } catch (t: Throwable) {
             statusText.text = "EXPORT FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun launchCsvExport(file: File) {
+        if (!file.isFile || !file.canRead()) {
+            statusText.text = "CSV export unavailable: saved file cannot be read."
+            return
+        }
+        pendingExportFile = file
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/csv"
+            putExtra(Intent.EXTRA_TITLE, file.name)
+        }
+        try {
+            startActivityForResult(intent, CSV_EXPORT_REQUEST_CODE)
+        } catch (t: Throwable) {
+            pendingExportFile = null
+            statusText.text = "Could not open Android document picker: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}. CSV remains in app storage."
+        }
+    }
+
+    @Deprecated("Handled for Android document-picker compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != CSV_EXPORT_REQUEST_CODE) return
+        val source = pendingExportFile
+        pendingExportFile = null
+        if (resultCode != RESULT_OK || data?.data == null) {
+            statusText.text = "CSV remains in app storage; document export was cancelled."
+            return
+        }
+        val destination: Uri = data.data!!
+        try {
+            if (source == null || !source.isFile) throw IllegalStateException("CSV source file is missing")
+            val output = contentResolver.openOutputStream(destination, "w")
+                ?: throw IllegalStateException("Android could not open the selected destination")
+            output.use { stream -> source.inputStream().use { input -> input.copyTo(stream) } }
+            statusText.text = "CSV exported successfully: ${source.name}"
+        } catch (t: Throwable) {
+            statusText.text = "CSV export failed: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}. Internal copy retained."
         }
     }
 
@@ -991,5 +1036,6 @@ class MainActivity : Activity() {
     companion object {
         private const val SHIZUKU_REQUEST_CODE = 4102
         private const val LINK_POLL_INTERVAL_MS = 2000L
+        private const val CSV_EXPORT_REQUEST_CODE = 5101
     }
 }
