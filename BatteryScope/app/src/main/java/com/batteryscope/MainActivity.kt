@@ -353,7 +353,7 @@ class MainActivity : Activity() {
             "power_role", "data_role", "port_type", "power_operation_mode", "online",
             "usb_power_delivery_revision", "usb_typec_revision", "usb_type",
             "real_type", "charge_type", "voltage_now", "current_now",
-            "fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update",
+            "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update", "mmi_charging_enable", "stop_charging_enable",
             "input_current_limit", "input_voltage_limit", "source-capabilities",
             "sink-capabilities", "maximum_current", "operational_current"
         )
