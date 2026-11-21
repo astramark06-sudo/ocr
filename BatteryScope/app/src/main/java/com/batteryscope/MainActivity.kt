@@ -549,9 +549,13 @@ class MainActivity : Activity() {
         val present = report.contains("Present: true")
         val readable = report.contains("Readable: true")
         val writable = report.contains("ADB-shell process canWrite(): true")
-        val detectedModel = report.lineSequence().firstOrNull { it.startsWith("Android model:") }
-            ?.substringAfter(":")?.trim()
-        val targetModel = detectedModel?.contains("RMX2161", ignoreCase = true) == true
+        val identityLines = report.lineSequence().filter {
+            it.startsWith("Android model:") || it.startsWith("Android device:") ||
+                it.startsWith("Android product:") || it.startsWith("Build fingerprint:")
+        }.toList()
+        val detectedModel = identityLines.joinToString(" | ") { it.substringAfter(":").trim() }
+            .ifBlank { "UNAVAILABLE" }
+        val targetModel = identityLines.any { it.contains("RMX2161", ignoreCase = true) }
         val current = report.lineSequence()
             .firstOrNull { it.startsWith("Current driver level:") }
             ?.substringAfter(":")?.trim()
@@ -590,9 +594,13 @@ class MainActivity : Activity() {
         val present = report.contains("Present: true")
         val readable = report.contains("Readable: true")
         val writable = report.contains("ADB-shell process canWrite(): true")
-        val detectedModel = report.lineSequence().firstOrNull { it.startsWith("Android model:") }
-            ?.substringAfter(":")?.trim()
-        val targetModel = detectedModel?.contains("RMX2161", ignoreCase = true) == true
+        val identityLines = report.lineSequence().filter {
+            it.startsWith("Android model:") || it.startsWith("Android device:") ||
+                it.startsWith("Android product:") || it.startsWith("Build fingerprint:")
+        }.toList()
+        val detectedModel = identityLines.joinToString(" | ") { it.substringAfter(":").trim() }
+            .ifBlank { "UNAVAILABLE" }
+        val targetModel = identityLines.any { it.contains("RMX2161", ignoreCase = true) }
         val rawLevel = report.lineSequence()
             .firstOrNull { it.startsWith("Current driver level:") }
             ?.substringAfter(":")?.trim()
