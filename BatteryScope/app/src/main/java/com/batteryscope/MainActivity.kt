@@ -381,6 +381,28 @@ class MainActivity : Activity() {
                 matches.forEach { appendLine(it) }
             }
             appendLine()
+            appendLine("OPLUS / VOOC DRIVER STATE")
+            val voocLines = report.lineSequence().filter { line ->
+                listOf("/fast_charge", "/voocchg_ing", "/charge_technology", "/adapter_fw_update")
+                    .any { line.contains(it) }
+            }.toList()
+            if (voocLines.isEmpty()) {
+                appendLine("Not exposed at the scanned power-supply paths, or not readable.")
+            } else {
+                voocLines.forEach { line ->
+                    val property = line.substringBefore(" = ").substringAfterLast("/")
+                    val raw = line.substringAfter(" = ", "unknown").substringBefore("  [")
+                    val meaning = when (property) {
+                        "fast_charge" -> "Oplus fast-charge UI indicator"
+                        "voocchg_ing" -> "Oplus VOOC driver fast-charge-in-progress flag"
+                        "charge_technology" -> "vendor project enum; interpretation intentionally omitted"
+                        "adapter_fw_update" -> "adapter firmware update state; enum interpretation omitted"
+                        else -> "raw driver property"
+                    }
+                    appendLine("$property = $raw  [$meaning]")
+                }
+            }
+            appendLine()
             appendLine("Interpretation limits")
             appendLine("• BatteryScope can report only interfaces published by this phone's kernel/firmware.")
             appendLine("• USB-PD PDO data, if present, is USB-PD evidence; it is not proof of SuperDart negotiation.")
@@ -413,6 +435,8 @@ class MainActivity : Activity() {
                 candidates.forEach { appendLine(it) }
                 appendLine("These are NOT verified safe controls. SELinux, driver validation, allowed ranges and charging side-effects are not established.")
             }
+            appendLine()
+            appendLine("Known unsafe Oplus control from the examined RM6785 source: MMI_CHARGING_ENABLE is binary charging enable/disable; its setter turns charging off/on and can stop VOOC. It is not a current-limit control, so this app never writes it.")
             appendLine()
             appendLine("Controls deliberately excluded:")
             appendLine("• USB-C power-role or data-role switching")
