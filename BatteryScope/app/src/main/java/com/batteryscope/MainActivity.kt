@@ -127,6 +127,7 @@ class MainActivity : Activity() {
                 }
                 runOnUiThread {
                     linkPollInFlight = false
+                    handler.removeCallbacks(this)
                     if (remoteService != null && activityResumed && !isFinishing) {
                         latestLinkSnapshot = snapshot
                         liveLinkText.text = buildLiveLinkSummary(snapshot)
@@ -658,6 +659,9 @@ class MainActivity : Activity() {
                 "CONTROL CALL FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
             }
             runOnUiThread {
+                controlHistory.append(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+                    .append(" | requested cool_down level=").append(level)
+                    .append(" | ").append(result).append('\n')
                 controlText.text = result
                 if (result.startsWith("READ-BACK VERIFIED:")) {
                     coolDownStatusText.text = result
