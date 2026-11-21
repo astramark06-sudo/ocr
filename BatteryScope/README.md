@@ -1,4 +1,4 @@
-# BatteryScope 1.5 — Realme Narzo 20 Pro (RMX2161)
+# BatteryScope 1.7 — Realme Narzo 20 Pro (RMX2161)
 
 BatteryScope is an evidence-first Android battery and charging-path diagnostic app. It shows values returned by Android and the handset's kernel, preserves source paths and raw values, and labels unavailable data as unavailable.
 
@@ -55,10 +55,10 @@ Shizuku is not root. The app displays the service UID and SELinux context so the
 
 ## Logging and exports
 
-Start CSV logging to record Android battery telemetry. Stop & export writes the CSV and a text report containing the latest full Shizuku audit and latest live sample to the app-specific files directory. Control results are reported only after the requested sysfs value reads back successfully.
+Start CSV logging to record Android battery telemetry. Stop & export opens Android's document picker and copies the CSV to the location you choose. An app-specific copy remains if you cancel or export fails. The separate text report containing the latest full Shizuku audit and latest live sample remains in app-specific storage. Control results are reported only after the requested sysfs value reads back successfully.
 
 ## Build
 
 The APK is built by GitHub Actions using Java 17, Gradle 8.9 and Android SDK 35. A successful build and uploaded artifact are required before a build is called installable.
 
-See AUDIT.md for the source audit, units, control semantics, known limits and release acceptance criteria.
+See [AUDIT.md](AUDIT.md) for the source audit, units, control semantics and known limits. See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the repeatable build and validation gate.
