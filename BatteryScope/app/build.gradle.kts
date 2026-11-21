@@ -5,6 +5,9 @@ plugins {
 android {
     namespace = "com.batteryscope"
     compileSdk = 35
+    buildFeatures {
+        aidl = true
+    }
     defaultConfig {
         applicationId = "com.batteryscope"
         minSdk = 26
