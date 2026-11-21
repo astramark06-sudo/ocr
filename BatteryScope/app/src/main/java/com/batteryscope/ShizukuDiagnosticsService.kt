@@ -2,6 +2,9 @@ package com.batteryscope
 
 import android.system.Os
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.charset.StandardCharsets
+import java.util.zip.GZIPInputStream
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -17,6 +20,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine("PID: ${safe { Os.getpid().toString() }}")
         appendLine("SELinux context: ${readOneLine(File("/proc/self/attr/current"))}")
         appendLine("Timestamp: ${System.currentTimeMillis()}")
+        appendLine("Kernel config CONFIG_OPLUS_SMART_CHARGER_SUPPORT: ${readSmartChargerConfig()}")
         appendLine()
         appendSection("POWER SUPPLY / USB VBUS AND IBUS", File("/sys/class/power_supply"),
             setOf("type", "online", "present", "status", "health", "capacity", "voltage_now",
@@ -27,7 +31,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 "charge_control_start_threshold", "charge_control_end_threshold", "charge_counter", "charge_now", "charge_full", "temp", "model_name", "manufacturer",
                 "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update",
                 "mmi_charging_enable", "stop_charging_enable", "charger_ic", "chargerid_volt",
-                "internal_capacity", "usb_status", "typec_cc_orientation", "typec_sbu_voltage"),
+                "internal_capacity", "usb_status", "typec_cc_orientation", "typec_sbu_voltage", "cool_down"),
             2)
         appendLine()
         appendSection("USB TYPE-C PORT / PARTNER ROLE AND MODE", File("/sys/class/typec"),
@@ -51,14 +55,71 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine()
         appendSection("ANDROID FRAMEWORK: dumpsys usb", null, emptySet(), 0, "dumpsys usb")
         appendLine()
+        appendLine("=== OPLUS COOL_DOWN CURRENT-LIMITER CAPABILITY ===")
+        val coolDownNode = File("/sys/class/power_supply/battery/cool_down")
+        appendLine("Node: ${coolDownNode.path}")
+        appendLine("Present: ${coolDownNode.exists() && coolDownNode.isFile}")
+        appendLine("Readable: ${coolDownNode.canRead()}")
+        appendLine("ADB-shell process canWrite(): ${coolDownNode.canWrite()}")
+        appendLine("Current driver level: ${if (coolDownNode.canRead()) readOneLine(coolDownNode) else "UNAVAILABLE"}")
+        appendLine("Reference-driver semantics: level 0 restores OEM defaults; levels 1..6 select bounded input-current caps.")
+        appendLine("Reference caps (normal/VOOC input current): L1 500/1000 mA; L2 900/1500 mA; L3 1200/2000 mA; L4 1500/2500 mA; L5 2000/3000 mA; L6 2000/3500 mA.")
+        appendLine("These are driver limit settings from the RM6785 reference source, not measured current or negotiated USB power.")
+        appendLine("This scan is read-only. No attributes were written during the audit.")
+        appendLine()
         appendLine("CONTROL SAFETY")
-        appendLine("No attributes were written. Writable status is an access check only, not proof that changing a value is safe.")
+        appendLine("Writable status is an access check only; a control operation separately checks the exact node, valid range, charging state, write result and read-back.")
         appendLine("Oplus kernel-source audit targets (when exposed by this firmware): battery/fastcharger, battery/voocchg_ing, battery/charge_technology, battery/adapter_fw_update and usb/fast_chg_type.")
         appendLine("fastcharger is the Oplus VOOC fast-charge UI indicator; voocchg_ing reads the driver fastchg_ing state. Neither reports USB VBUS/IBUS or the exact adapter contract.")
         appendLine("fast_chg_type is a driver-reported charger subtype code; BatteryScope preserves it raw. Vendor enums/status values are not guessed.")
         appendLine("mmi_charging_enable and stop_charging_enable are read-only observations in this app; no write is attempted.")
         appendLine("No USB role, voltage, current limit, charging mode, or protocol negotiation was changed.")
         appendLine("A missing node means not exposed at this path; it does not prove the hardware lacks that capability.")
+    }
+
+    private fun readSmartChargerConfig(): String {
+        val config = File("/proc/config.gz")
+        if (!config.exists()) return "NOT EXPORTED at /proc/config.gz"
+        return try {
+            GZIPInputStream(config.inputStream()).bufferedReader().useLines { lines ->
+                lines.firstOrNull { it.startsWith("CONFIG_OPLUS_SMART_CHARGER_SUPPORT=") }
+                    ?: "SYMBOL NOT FOUND"
+            }
+        } catch (t: Throwable) {
+            "UNREADABLE: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+        }
+    }
+
+    override fun setCoolDown(level: Int): String {
+        if (level !in 0..6) return "REJECTED: level must be between 0 and 6."
+        val node = File("/sys/class/power_supply/battery/cool_down")
+        if (!node.exists() || !node.isFile) return "UNAVAILABLE: exact battery/cool_down node is not present."
+        if (!node.canRead()) return "DENIED: cooldown node cannot be read."
+        if (!node.canWrite()) return "DENIED: Shizuku process does not have write access. No write was attempted."
+        val before = readOneLine(node)
+        val beforeLevel = before.toIntOrNull()
+            ?: return "REJECTED: current driver value is not a numeric level (raw='$before')."
+        if (beforeLevel !in 0..6) return "REJECTED: current driver value $beforeLevel is outside the verified 0..6 range."
+        val statusFile = File("/sys/class/power_supply/battery/status")
+        val batteryStatus = if (statusFile.canRead()) readOneLine(statusFile) else "UNKNOWN"
+        if (!batteryStatus.equals("Charging", ignoreCase = true)) {
+            return "REJECTED: battery status is '$batteryStatus', not Charging. Connect the charger and rescan before changing the limit."
+        }
+        return try {
+            FileOutputStream(node).use { stream ->
+                stream.write("$level\n".toByteArray(StandardCharsets.US_ASCII))
+                stream.flush()
+            }
+            val after = readOneLine(node)
+            val actual = after.toIntOrNull()
+            if (actual == level) {
+                "READ-BACK VERIFIED: old level=$beforeLevel, requested level=$level, read-back level=$actual. This verifies the driver setting only; it does not prove the physical input current changed."
+            } else {
+                "READ-BACK MISMATCH: old level=$beforeLevel, requested level=$level, returned raw='$after'. Treat the setting as unverified and run a fresh audit."
+            }
+        } catch (t: Throwable) {
+            "WRITE FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}. No further changes were attempted."
+        }
     }
 
     private fun StringBuilder.appendSection(
