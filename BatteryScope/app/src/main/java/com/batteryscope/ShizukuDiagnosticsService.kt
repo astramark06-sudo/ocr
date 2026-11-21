@@ -129,7 +129,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 process.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         synchronized(output) {
-                            if (output.length < 6000) output.append(line).append('\\n')
+                            if (output.length < 6000) output.append(line).append('\n')
                         }
                     }
                 }
