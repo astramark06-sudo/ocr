@@ -21,10 +21,10 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendSection("POWER SUPPLY / USB VBUS AND IBUS", File("/sys/class/power_supply"),
             setOf("type", "online", "present", "status", "health", "capacity", "voltage_now",
                 "voltage_avg", "voltage_max", "voltage_min", "current_now", "current_avg",
-                "current_max", "power_now", "input_current_limit", "input_voltage_limit",
+                "current_max", "power_now", "input_current_limit", "input_current_limit_max", "input_voltage_limit", "input_voltage_limit_max",
                 "input_power_limit", "usb_type", "real_type", "charge_type", "constant_charge_current",
-                "constant_charge_voltage", "charge_control_limit", "charge_control_limit_max",
-                "charge_counter", "charge_now", "charge_full", "temp", "model_name", "manufacturer"),
+                "constant_charge_voltage", "charge_control_limit", "charge_control_limit_min", "charge_control_limit_max",
+                "charge_control_start_threshold", "charge_control_end_threshold", "charge_counter", "charge_now", "charge_full", "temp", "model_name", "manufacturer"),
             2)
         appendLine()
         appendSection("USB TYPE-C PORT / PARTNER ROLE AND MODE", File("/sys/class/typec"),
@@ -93,7 +93,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                     val value = readOneLine(child)
                     val mode = when {
                         !child.canRead() -> "NO_READ"
-                        child.canWrite() -> "READABLE; WRITE ACCESS APPEARS AVAILABLE"
+                        child.canWrite() -> "DAC ACCESS CHECK: READABLE AND WRITABLE; SELINUX/DRIVER BEHAVIOR NOT TESTED"
                         else -> "READABLE; NO WRITE ACCESS"
                     }
                     appendLine("${child.path} = ${value}  [${mode}]")
@@ -105,21 +105,42 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         if (emitted >= 180) appendLine("Output cap reached; scan truncated.")
     }
 
-    private fun readOneLine(file: File): String = try {
-        if (!file.canRead()) return "READ_DENIED"
-        file.inputStream().bufferedReader().use { it.readLine()?.take(240) ?: "EMPTY" }
-    } catch (t: Throwable) {
-        "ERROR:${t.javaClass.simpleName}:${t.message ?: "unknown"}".take(240)
+    private fun readOneLine(file: File): String {
+        return try {
+            if (!file.canRead()) {
+                "READ_DENIED"
+            } else {
+                file.inputStream().bufferedReader().use { it.readLine()?.take(240) ?: "EMPTY" }
+            }
+        } catch (t: Throwable) {
+            "ERROR:${t.javaClass.simpleName}:${t.message ?: "unknown"}".take(240)
+        }
     }
 
     private fun runCommand(command: List<String>, timeoutMs: Long): String = try {
         val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        val output = StringBuilder()
+        val reader = Thread {
+            try {
+                process.inputStream.bufferedReader().useLines { lines ->
+                    lines.forEach { line ->
+                        synchronized(output) {
+                            if (output.length < 6000) output.append(line).append('\\n')
+                        }
+                    }
+                }
+            } catch (_: Throwable) { }
+        }
+        reader.isDaemon = true
+        reader.start()
         val completed = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
         if (!completed) {
             process.destroyForcibly()
+            reader.join(500)
             "TIMEOUT after ${timeoutMs} ms"
         } else {
-            process.inputStream.bufferedReader().use { it.readText().take(6000) }
+            reader.join(1000)
+            synchronized(output) { output.toString().take(6000) }
         }
     } catch (t: Throwable) {
         "COMMAND FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
