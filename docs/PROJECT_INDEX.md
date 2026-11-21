@@ -18,6 +18,7 @@ This repository is a multi-project workspace. Keep each project's source, depend
 - Engineering audit: [../BatteryScope/AUDIT.md](../BatteryScope/AUDIT.md)
 - Release history: [../BatteryScope/CHANGELOG.md](../BatteryScope/CHANGELOG.md)
 - Release gate: [../BatteryScope/RELEASE_CHECKLIST.md](../BatteryScope/RELEASE_CHECKLIST.md)
+- Current handoff/status: [../BatteryScope/PROJECT_STATUS.md](../BatteryScope/PROJECT_STATUS.md)
 - Android source: `BatteryScope/app/src/main/`
 - APK CI: `.github/workflows/batteryscope-build.yml`
 - Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted.
