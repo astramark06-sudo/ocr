@@ -24,7 +24,8 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 "current_max", "power_now", "input_current_limit", "input_current_limit_max", "input_voltage_limit", "input_voltage_limit_max",
                 "input_power_limit", "usb_type", "real_type", "charge_type", "constant_charge_current",
                 "constant_charge_voltage", "charge_control_limit", "charge_control_limit_min", "charge_control_limit_max",
-                "charge_control_start_threshold", "charge_control_end_threshold", "charge_counter", "charge_now", "charge_full", "temp", "model_name", "manufacturer"),
+                "charge_control_start_threshold", "charge_control_end_threshold", "charge_counter", "charge_now", "charge_full", "temp", "model_name", "manufacturer",
+                "fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update"),
             2)
         appendLine()
         appendSection("USB TYPE-C PORT / PARTNER ROLE AND MODE", File("/sys/class/typec"),
@@ -50,6 +51,9 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine()
         appendLine("CONTROL SAFETY")
         appendLine("No attributes were written. Writable status is an access check only, not proof that changing a value is safe.")
+        appendLine("Oplus kernel-source audit targets (when exposed by this firmware): battery/fast_charge, battery/voocchg_ing, battery/charge_technology and battery/adapter_fw_update.")
+        appendLine("fast_charge is the Oplus VOOC fast-charge UI indicator; voocchg_ing reads the driver fastchg_ing state. Neither reports USB VBUS/IBUS or the exact adapter contract.")
+        appendLine("charge_technology and adapter_fw_update are raw driver enum/status values; BatteryScope does not guess their meanings.")
         appendLine("No USB role, voltage, current limit, charging mode, or protocol negotiation was changed.")
         appendLine("A missing node means not exposed at this path; it does not prove the hardware lacks that capability.")
     }
