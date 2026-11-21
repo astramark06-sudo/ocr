@@ -124,7 +124,7 @@ BatteryScope does not bypass this. Its scan reports:
 - raw current cooldown level;
 - CONFIG_OPLUS_SMART_CHARGER_SUPPORT from /proc/config.gz when exported.
 
-If the exact node is not present, unreadable, outside the expected 0–6 range, or not writable by the Shizuku service, the UI disables all control buttons.
+If the exact node is not present, unreadable, outside the expected 0–6 range, or not writable by the Shizuku service, the UI disables all control buttons. The Shizuku-side setter also requires RMX2161 to appear in model/device/product/fingerprint, and the app-side UI applies the same identity gate before enabling the buttons.
 
 ### Write guard
 
@@ -159,7 +159,7 @@ The Oplus setter does not itself validate negative levels in the reference sourc
 - File paths are kept with raw values.
 - Live link snapshots are sampled state, not protocol packet capture.
 - Control requests are explicitly confirmed and read back.
-- CSV logs contain Android framework telemetry and ordinary-app sysfs snapshots. The text export contains the latest full Shizuku report and latest live link sample.
+- CSV logs stream Android framework telemetry and ordinary-app sysfs snapshots to disk, with periodic flushes and close-on-stop/activity-destroy behavior. The text export contains the latest full Shizuku report, latest live link sample and control action history.
 
 ## 7. CI and release acceptance
 
