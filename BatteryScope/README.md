@@ -8,7 +8,7 @@ BatteryScope is a read-only Android battery and charging-path diagnostic applica
 - Battery-side instantaneous and average current, charge counter and energy counter from BatteryManager.
 - Optional battery-side power estimate, calculated from battery voltage × battery current. This is not charger USB input power.
 - Standard Linux power-supply attributes with node paths and raw values.
-- Oplus/VOOC driver states when the installed firmware exposes them: fast_charge, voocchg_ing, charge_technology and adapter_fw_update.
+- Oplus/VOOC driver states when the installed firmware exposes them: fastcharger, fast_chg_type (USB supply), voocchg_ing, charge_technology and adapter_fw_update.
 
 ## Phone ↔ charger inspection
 
@@ -22,7 +22,7 @@ With Shizuku running via Android Wireless debugging and BatteryScope authorized,
 - dumpsys battery
 - dumpsys usb
 
-The results distinguish Type-C roles, USB-PD advertised capabilities, charger/USB supply telemetry, and VOOC driver status. The scan is an on-demand snapshot. It is not a continuous electrical packet trace.
+The results distinguish Type-C roles, USB-PD advertised capabilities, charger/USB supply telemetry, Oplus VOOC driver flags and the driver's charger-subtype code when those attributes are exposed. The scan is an on-demand snapshot. It is not a continuous electrical packet trace.
 
 USB-PD PDOs are advertised capabilities; they do not prove the selected live contract. A VOOC driver flag is evidence of the driver's internal state, not a direct voltage/current measurement at the USB connector.
 
