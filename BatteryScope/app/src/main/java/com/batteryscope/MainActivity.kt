@@ -548,17 +548,24 @@ class MainActivity : Activity() {
         val present = report.contains("Present: true")
         val readable = report.contains("Readable: true")
         val writable = report.contains("ADB-shell process canWrite(): true")
+        val detectedModel = report.lineSequence().firstOrNull { it.startsWith("Android model:") }
+            ?.substringAfter(":")?.trim()
+        val targetModel = detectedModel?.contains("RMX2161", ignoreCase = true) == true
         val current = report.lineSequence()
             .firstOrNull { it.startsWith("Current driver level:") }
             ?.substringAfter(":")?.trim()
         return buildString {
+            appendLine("Detected model: ${detectedModel ?: "UNAVAILABLE"}")
+            appendLine("Target model check: ${if (targetModel) "RMX2161 MATCH" else "MISMATCH / UNVERIFIED"}")
             appendLine("Oplus COOL_DOWN node: ${if (present) "PRESENT" else "NOT EXPOSED"}")
             appendLine("ADB-shell read access: ${if (readable) "YES" else "NO"}")
             appendLine("ADB-shell write access: ${if (writable) "YES (permission check only)" else "NO"}")
             appendLine("Current driver level: ${current ?: "UNAVAILABLE"}")
             appendLine("Accepted reference levels: 0 (restore OEM defaults), 1..6 (input-current limit steps)")
             appendLine("No value is written during a scan.")
-            if (!present) {
+            if (!targetModel) {
+                appendLine("Device identity does not match RMX2161. Charging writes are blocked.")
+            } else if (!present) {
                 appendLine("The installed kernel did not expose /sys/class/power_supply/battery/cool_down at the audited path. No control is available through this interface.")
             } else if (!writable) {
                 appendLine("The node exists but the Shizuku process cannot write it. Shizuku is ADB-shell privilege, not root; controls remain disabled.")
@@ -582,12 +589,15 @@ class MainActivity : Activity() {
         val present = report.contains("Present: true")
         val readable = report.contains("Readable: true")
         val writable = report.contains("ADB-shell process canWrite(): true")
+        val detectedModel = report.lineSequence().firstOrNull { it.startsWith("Android model:") }
+            ?.substringAfter(":")?.trim()
+        val targetModel = detectedModel?.contains("RMX2161", ignoreCase = true) == true
         val rawLevel = report.lineSequence()
             .firstOrNull { it.startsWith("Current driver level:") }
             ?.substringAfter(":")?.trim()
         val parsedLevel = rawLevel?.toIntOrNull()
         currentCoolDownLevel = parsedLevel
-        coolDownNodeWritable = present && readable && writable && parsedLevel?.let { it in 0..6 } == true
+        coolDownNodeWritable = targetModel && present && readable && writable && parsedLevel?.let { it in 0..6 } == true
         val charging = isChargingAndPlugged()
         coolDownButtons.forEachIndexed { index, button ->
             val level = index
@@ -596,6 +606,7 @@ class MainActivity : Activity() {
             button.isEnabled = coolDownNodeWritable && charging && remoteService != null
         }
         coolDownStatusText.text = when {
+            !targetModel -> "LOCKED: detected model '${detectedModel ?: "unknown"}' does not match RMX2161."
             !present -> "CONTROL UNAVAILABLE: /sys/class/power_supply/battery/cool_down is not exposed by this firmware."
             !readable -> "CONTROL UNAVAILABLE: cooldown node is present but unreadable to Shizuku."
             !writable -> "READ-ONLY: cooldown node is visible, but the Shizuku ADB-shell UID has no write permission. Root or an OEM privileged service would be required; controls are locked."
