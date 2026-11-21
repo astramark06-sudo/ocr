@@ -1,55 +1,64 @@
-# BatteryScope 1.3 — Realme Narzo 20 Pro (RMX2161)
+# BatteryScope 1.5 — Realme Narzo 20 Pro (RMX2161)
 
-BatteryScope is a read-only Android battery and charging-path diagnostic application. It is designed to show what the phone's own Android framework and kernel expose, without inventing hidden values.
+BatteryScope is an evidence-first Android battery and charging-path diagnostic app. It shows values returned by Android and the handset's kernel, preserves source paths and raw values, and labels unavailable data as unavailable.
 
-## What it measures
+## Battery telemetry
 
-- State of charge, battery voltage, temperature and health from Android battery broadcasts.
+- State of charge, battery voltage, temperature, health, plug source and battery chemistry string from Android battery broadcasts.
 - Battery-side instantaneous and average current, charge counter and energy counter from BatteryManager.
-- Optional battery-side power estimate, calculated from battery voltage × battery current. This is not charger USB input power.
-- Standard Linux power-supply attributes with node paths and raw values.
-- Oplus/VOOC driver states when the installed firmware exposes them: fastcharger, fast_chg_type (USB supply), voocchg_ing, charge_technology and adapter_fw_update.
+- Battery-side power estimate calculated from battery voltage × battery current. This is not USB charger input power.
+- Raw Android voltage and current properties are retained. Unavailable values are not replaced with zero or guessed.
 
-## Phone ↔ charger inspection
+## Phone ↔ charger visibility
 
-With Shizuku running via Android Wireless debugging and BatteryScope authorized, the app runs a read-only Shizuku UserService scan of:
+When Shizuku is running through Android Wireless debugging and BatteryScope is authorized:
 
-- /sys/class/power_supply
-- /sys/class/typec
-- /sys/class/usb_power_delivery
-- /sys/class/dual_role_usb
-- /sys/class/usb_role
-- dumpsys battery
-- dumpsys usb
+- A full audit reads /sys/class/power_supply, /sys/class/typec, /sys/class/usb_power_delivery, legacy USB-role nodes, dumpsys battery and dumpsys usb.
+- A lightweight live sampler polls available power-supply, Type-C, USB-PD and Oplus/VOOC driver fields every two seconds.
+- The app shows the exact sysfs source path and unmodified value. Oplus vendor enums remain raw unless their mapping is verified in the inspected source.
+- fastcharger is the Oplus VOOC-related UI/driver indicator; voocchg_ing is the driver fast-charge-in-progress flag; fast_chg_type is a driver-reported charger subtype. These are driver states, not measured VBUS/IBUS or a captured protocol handshake.
 
-The results distinguish Type-C roles, USB-PD advertised capabilities, charger/USB supply telemetry, Oplus VOOC driver flags and the driver's charger-subtype code when those attributes are exposed. The scan is an on-demand snapshot. It is not a continuous electrical packet trace.
+USB-PD source/sink capability records describe advertised capabilities; they do not prove the currently selected contract. The app does not capture electrical packets or proprietary SuperDart/VOOC wire traffic. A live sample is a kernel-state snapshot, not a protocol trace.
 
-USB-PD PDOs are advertised capabilities; they do not prove the selected live contract. A VOOC driver flag is evidence of the driver's internal state, not a direct voltage/current measurement at the USB connector.
+## Conditional Oplus current-limit control
 
-## What it cannot control
+The Oplus RM6785 reference kernel contains a COOL_DOWN power-supply property when CONFIG_OPLUS_SMART_CHARGER_SUPPORT is enabled. Its cool_down setter accepts level 0 (restore driver defaults) and levels 1–6 (discrete input-current limits). The reference source maps the normal / VOOC input caps as:
 
-BatteryScope does not force SuperDart/VOOC negotiation and does not offer a generic charge-current slider.
+| Level | Normal input cap | VOOC input cap |
+|---|---:|---:|
+| 1 | 500 mA | 1000 mA |
+| 2 | 900 mA | 1500 mA |
+| 3 | 1200 mA | 2000 mA |
+| 4 | 1500 mA | 2500 mA |
+| 5 | 2000 mA | 3000 mA |
+| 6 | 2000 mA | 3500 mA |
 
-The inspected Oplus RM6785 source family includes MMI_CHARGING_ENABLE, whose setter turns charging off/on and can terminate VOOC. That is not a charge-rate control and is deliberately not written. USB OTG/power-role switches are also excluded.
+These are reference-driver limit settings, not measured current and not the negotiated charger profile. Installed firmware may differ.
 
-No write to sysfs, USB roles, I²C or PMIC is performed. A control can only be added when its exact semantics, units, permitted range and rollback behavior are verified on the installed RMX2161 firmware.
+BatteryScope exposes those level buttons only when all live checks pass: the exact /sys/class/power_supply/battery/cool_down node exists, is readable, reports a numeric level within 0–6, and the Shizuku service process reports effective write access. It also requires Android and the battery sysfs node to report charging. A user must confirm the requested change. BatteryScope writes only the bounded value 0–6 to that one property, then reads it back. A successful read-back confirms the driver setting only; it does not prove the physical input current changed.
+
+**Non-root limitation:** Shizuku started with Wireless debugging runs as ADB shell, not root. In the inspected Linux power-supply implementation, a writable property receives owner-write permission (S_IWUSR). A shell process normally does not own that root-owned sysfs file. If the live permission check fails, the controls remain disabled. BatteryScope does not try to bypass permissions.
+
+The app deliberately does not write MMI_CHARGING_ENABLE (binary charging on/off that can terminate VOOC), STOP_CHARGING_ENABLE, OTG_SWITCH, USB power/data roles, PMIC/I²C registers or protocol commands. It cannot force VOOC/SuperDart, request an arbitrary negotiated voltage/current profile, or increase the charger's hardware capability.
+
+Reference source: [EvilAnsh/kernel_realme_RM6785](https://github.com/EvilAnsh/kernel_realme_RM6785/tree/271e01b9109b6efde028e6011125b6328cda673a). This is a community kernel reference, not proof that every retail firmware build has identical code or permissions.
 
 ## Shizuku setup
 
 1. Install Shizuku from https://shizuku.rikka.app/.
-2. Start Shizuku using Android 12 Wireless debugging.
-3. Open BatteryScope and choose **Run Shizuku power-path audit**.
+2. Start it using Android 12 Wireless debugging.
+3. Open BatteryScope and tap **Run Shizuku power-path audit**.
 4. Grant BatteryScope access in the Shizuku permission prompt.
-5. Run the audit again if needed. The report displays the service UID and SELinux context.
+5. The full audit then runs and the live panel polls the exposed driver state every two seconds.
 
-Shizuku gives an app ADB-shell privileges when started through Wireless debugging; it is not root. The phone's SELinux policy may still deny some nodes.
+Shizuku is not root. The app displays the service UID and SELinux context so the diagnostic privilege level is explicit.
 
-## Exports
+## Logging and exports
 
-CSV telemetry and the latest Shizuku audit report are written to the app-specific files directory. Values are raw or explicitly labelled with their measurement domain and units.
+Start CSV logging to record Android battery telemetry. Stop & export writes the CSV and a text report containing the latest full Shizuku audit and latest live sample to the app-specific files directory. Control results are reported only after the requested sysfs value reads back successfully.
 
 ## Build
 
-GitHub Actions builds the debug APK from this branch using Java 17, Gradle 8.9 and Android SDK 35. CI success is required before an APK is considered installable.
+The APK is built by GitHub Actions using Java 17, Gradle 8.9 and Android SDK 35. A successful build and uploaded artifact are required before a build is called installable.
 
-See [AUDIT.md](AUDIT.md) for the detailed measurement model, kernel-source findings, known risks, and release acceptance criteria.
+See AUDIT.md for the source audit, units, control semantics, known limits and release acceptance criteria.
