@@ -31,9 +31,13 @@ class MainActivity : Activity() {
     private lateinit var diagnosticText: TextView
     private lateinit var communicationText: TextView
     private lateinit var controlText: TextView
+    private lateinit var coolDownStatusText: TextView
     private lateinit var statusText: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+    private val coolDownButtons = mutableListOf<Button>()
+    private var currentCoolDownLevel: Int? = null
+    private var coolDownNodeWritable = false
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var logging = false
@@ -48,7 +52,7 @@ class MainActivity : Activity() {
             ComponentName(packageName, ShizukuDiagnosticsService::class.java.name)
         ).daemon(false)
             .processNameSuffix("batteryscope_diag")
-            .version(2)
+            .version(3)
             .tag("batteryscope_readonly_diagnostics")
     }
 
@@ -193,9 +197,33 @@ class MainActivity : Activity() {
         batteryText = addPanel(content, "01  BATTERY TELEMETRY  •  ANDROID FRAMEWORK")
         chargerText = addPanel(content, "02  POWER SUPPLY NODES  •  KERNEL")
         communicationText = addPanel(content, "03  PHONE ↔ CHARGER COMMUNICATION")
-        communicationText.text = "Not scanned. Start Shizuku and run the privileged read-only audit to inspect Type-C roles, charger state, USB-PD capability records and any vendor-exposed charging attributes."
-        controlText = addPanel(content, "04  CONTROL CAPABILITY  •  SAFETY GATED")
-        controlText.text = "No charging control is enabled. BatteryScope will only expose a control after it finds a device-specific, bounded and verifiable charge-limit interface. USB power-role switching and raw protocol writes are excluded."
+        communicationText.text = "Not scanned. Start Shizuku and run the privileged audit to inspect Type-C roles, USB-PD data, Oplus VOOC driver state and charger-side telemetry when the kernel exposes it."
+        controlText = addPanel(content, "04  OPLUS INPUT-CURRENT LIMITER  •  CONDITIONAL")
+        controlText.text = "Waiting for device audit. The possible control is the Oplus cool_down driver interface, not a USB-PD/VOOC protocol command."
+        coolDownStatusText = makeText(11f, Color.rgb(225, 231, 241), false)
+        content.addView(coolDownStatusText)
+        coolDownStatusText.text = "No device capability scan yet. Controls are locked."
+        val levelRows = listOf(0..3, 4..6)
+        levelRows.forEach { levels ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            levels.forEach { level ->
+                val button = Button(this).apply {
+                    text = if (level == 0) "OEM" else "L$level"
+                    isEnabled = false
+                    setOnClickListener { confirmCoolDownChange(level) }
+                }
+                coolDownButtons.add(button)
+                row.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+            content.addView(row)
+        }
+        val controlLegend = makeText(10f, Color.rgb(155, 170, 191), false).apply {
+            text = "Reference driver caps, normal / VOOC input current: L1 500 / 1000 mA • L2 900 / 1500 mA • L3 1200 / 2000 mA • L4 1500 / 2500 mA • L5 2000 / 3000 mA • L6 2000 / 3500 mA. These are source-code limit values, not measured draw or a negotiated charger profile. OEM resets to factory driver defaults."
+        }
+        content.addView(controlLegend)
         diagnosticText = addPanel(content, "05  ACCESS, SOURCE & DATA QUALITY")
         val scanButton = Button(this).apply {
             text = "Run Shizuku power-path audit"
@@ -204,7 +232,7 @@ class MainActivity : Activity() {
         content.addView(scanButton, LinearLayout.LayoutParams(-1, -2))
 
         val note = makeText(11f, Color.rgb(155, 170, 191), false).apply {
-            text = "Measurement rules: battery current is not USB input current. Only a USB/charger supply node's IBUS/VBUS fields can represent charger-side current/voltage. BatteryScope never invents missing values and never writes to charging or USB-role controls."
+            text = "Measurement rules: battery current is not USB input current. Only USB/charger supply nodes can report charger-side voltage/current. BatteryScope does not decode the proprietary SuperDart wire handshake or alter the selected USB protocol. The optional Oplus control is available only when the exact bounded kernel interface is present and writable."
             setPadding(2, 12, 2, 16)
         }
         content.addView(note)
@@ -342,7 +370,8 @@ class MainActivity : Activity() {
                     appendLine("Scan timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(latestDiagnosticTimeMs))}")
                     appendLine("Report bytes: ${report.toByteArray().size}")
                     appendLine("Evidence classification: raw kernel/framework output; no inferred contract unless explicitly labelled")
-                    appendLine("No writes performed")
+                    appendLine("Audit itself: read-only")
+            appendLine("Control actions: logged separately and require a confirmation plus exact-node read-back")
                 }
             }
         }.start()
