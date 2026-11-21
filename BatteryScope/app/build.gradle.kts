@@ -1,10 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    dependencies {
-        implementation("dev.rikka.shizuku:api:13.1.5")
-        implementation("dev.rikka.shizuku:provider:13.1.5")
-    }
 }
 android {
     namespace = "com.batteryscope"
@@ -23,4 +19,9 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 }
