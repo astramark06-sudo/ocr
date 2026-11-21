@@ -898,13 +898,13 @@ class MainActivity : Activity() {
             logging = true
             startButton.isEnabled = false
             stopButton.isEnabled = true
-            statusText.text = "CSV logging: \${file.name}"
+            statusText.text = "CSV logging: ${file.name}"
             refreshReadings()
         } catch (t: Throwable) {
             logging = false
             startButton.isEnabled = true
             stopButton.isEnabled = false
-            statusText.text = "CSV START FAILED: \${t.javaClass.simpleName}: \${t.message ?: "unknown"}"
+            statusText.text = "CSV START FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
         }
     }
 
@@ -917,7 +917,7 @@ class MainActivity : Activity() {
             csvWriter?.flush()
             csvWriter?.close()
         } catch (t: Throwable) {
-            closeError = "\${t.javaClass.simpleName}: \${t.message ?: "close error"}"
+            closeError = "${t.javaClass.simpleName}: ${t.message ?: "close error"}"
         } finally {
             csvWriter = null
         }
@@ -928,18 +928,18 @@ class MainActivity : Activity() {
         try {
             if (latestDiagnosticReport.isNotBlank() || latestLinkSnapshot.isNotBlank() || controlHistory.isNotEmpty()) {
                 val directory = getExternalFilesDir(null) ?: filesDir
-                reportFile = File(directory, "BatteryScope_\${timestamp}-diagnostics.txt")
+                reportFile = File(directory, "BatteryScope_${timestamp}-diagnostics.txt")
                 reportFile.writeText(
                     "FULL SHIZUKU AUDIT\\n$latestDiagnosticReport\\n\\nLATEST LIVE POWER-PATH SAMPLE\\n$latestLinkSnapshot\\n\\nCONTROL ACTION HISTORY\\n$controlHistory"
                 )
             }
             statusText.text = buildString {
-                appendLine(if (file != null) "CSV saved: \${file.name} ($csvSampleCount samples)" else "No CSV file was created.")
-                if (reportFile != null) appendLine("Diagnostics saved: \${reportFile.name}")
+                appendLine(if (file != null) "CSV saved: ${file.name} ($csvSampleCount samples)" else "No CSV file was created.")
+                if (reportFile != null) appendLine("Diagnostics saved: ${reportFile.name}")
                 if (closeError != null) appendLine("CSV close warning: $closeError")
             }.trim()
         } catch (t: Throwable) {
-            statusText.text = "EXPORT FAILED: \${t.javaClass.simpleName}: \${t.message ?: "unknown"}"
+            statusText.text = "EXPORT FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
         }
     }
 
