@@ -1,6 +1,7 @@
 package com.batteryscope
 
 import android.system.Os
+import android.os.Build
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
@@ -19,6 +20,11 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine("BATTERYSCOPE PRIVILEGED READ-ONLY AUDIT")
         appendLine("Process UID: ${safe { Os.getuid().toString() }} (2000 normally means ADB shell; 0 means root)")
         appendLine("PID: ${safe { Os.getpid().toString() }}")
+        appendLine("Android manufacturer: ${Build.MANUFACTURER}")
+        appendLine("Android model: ${Build.MODEL}")
+        appendLine("Android device: ${Build.DEVICE}")
+        appendLine("Android product: ${Build.PRODUCT}")
+        appendLine("Build fingerprint: ${Build.FINGERPRINT}")
         appendLine("SELinux context: ${readOneLine(File("/proc/self/attr/current"))}")
         appendLine("Timestamp: ${System.currentTimeMillis()}")
         appendLine("Kernel config CONFIG_OPLUS_SMART_CHARGER_SUPPORT: ${readSmartChargerConfig()}")
@@ -144,6 +150,9 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
     }
 
     override fun setCoolDown(level: Int): String {
+        if (!Build.MODEL.contains("RMX2161", ignoreCase = true)) {
+            return "DENIED: this control is only enabled for the audited RMX2161 model; detected model='" + Build.MODEL + "'."
+        }
         if (level !in 0..6) return "REJECTED: level must be between 0 and 6."
         val node = File("/sys/class/power_supply/battery/cool_down")
         if (!node.exists() || !node.isFile) return "UNAVAILABLE: exact battery/cool_down node is not present."
