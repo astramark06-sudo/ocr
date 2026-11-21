@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private var currentCoolDownLevel: Int? = null
     private var coolDownNodeWritable = false
     private var linkPollInFlight = false
+    private var activityResumed = false
     private var latestLinkSnapshot = ""
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -122,7 +123,7 @@ class MainActivity : Activity() {
                 }
                 runOnUiThread {
                     linkPollInFlight = false
-                    if (remoteService != null && !isFinishing) {
+                    if (remoteService != null && activityResumed && !isFinishing) {
                         latestLinkSnapshot = snapshot
                         liveLinkText.text = buildLiveLinkSummary(snapshot)
                         handler.postDelayed(this, LINK_POLL_INTERVAL_MS)
@@ -184,6 +185,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        activityResumed = true
         handler.removeCallbacks(sampler)
         handler.post(sampler)
         updateShizukuAvailability()
@@ -191,6 +193,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        activityResumed = false
         handler.removeCallbacks(sampler)
         handler.removeCallbacks(linkSampler)
         super.onPause()
@@ -424,6 +427,45 @@ class MainActivity : Activity() {
                 }
             }
         }.start()
+    }
+
+    private fun startLiveLinkPolling() {
+        if (remoteService == null || !activityResumed) return
+        handler.removeCallbacks(linkSampler)
+        handler.post(linkSampler)
+    }
+
+    private fun buildLiveLinkSummary(snapshot: String): String {
+        val timestamp = snapshot.lineSequence()
+            .firstOrNull { it.startsWith("Timestamp:") }
+            ?.substringAfter(":")?.trim()?.toLongOrNull()
+        val timeLabel = timestamp?.let {
+            SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date(it))
+        } ?: "unknown"
+        val keys = listOf(
+            "online", "status", "voltage_now", "voltage_avg", "current_now",
+            "current_avg", "power_now", "usb_type", "real_type", "charge_type",
+            "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology",
+            "adapter_fw_update", "cool_down", "power_role", "data_role",
+            "port_type", "power_operation_mode", "operational_current",
+            "maximum_current"
+        )
+        val rows = snapshot.lineSequence().filter { line ->
+            line.startsWith("/sys/") && keys.any { line.contains("/$it =") }
+        }.take(60).toList()
+        return buildString {
+            appendLine("Last sample: $timeLabel  •  target poll: 2 seconds")
+            if (rows.isEmpty()) {
+                appendLine("No readable live power-path / Type-C / VOOC attributes were returned.")
+                appendLine("This is unavailable data, not a zero current or a confirmed inactive fast-charge state.")
+            } else {
+                rows.forEach { appendLine(it) }
+            }
+            appendLine()
+            appendLine("Provenance: raw kernel sysfs paths and values. Battery / BMS current is not USB input current.")
+            appendLine("VOOC state flags are driver state, not wire-packet capture. PDO/contract selection is shown only if the kernel explicitly exports it.")
+            appendLine("The poll is a sampled driver snapshot, not a USB protocol trace or electrical measurement at the connector.")
+        }
     }
 
     private fun buildCommunicationSummary(report: String): String {
@@ -842,7 +884,7 @@ class MainActivity : Activity() {
             file.writeText(csv.toString())
             val reportFile = if (latestDiagnosticReport.isNotBlank()) {
                 File(directory, "BatteryScope_$timestamp-shizuku-audit.txt").apply {
-                    writeText("Scan time: $latestDiagnosticTimeMs\n\n$latestDiagnosticReport")
+                    writeText("Scan time: $latestDiagnosticTimeMs\n\n$latestDiagnosticReport\n\nLATEST LIVE SAMPLE\n$latestLinkSnapshot")
                 }
             } else null
             statusText.text = "CSV saved in app files: ${file.name}" +
@@ -855,6 +897,7 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         logging = false
         handler.removeCallbacks(sampler)
+        handler.removeCallbacks(linkSampler)
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
         Shizuku.removeBinderDeadListener(binderDeadListener)
         Shizuku.removeRequestPermissionResultListener(permissionListener)
