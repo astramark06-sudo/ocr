@@ -25,7 +25,9 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 "input_power_limit", "usb_type", "real_type", "charge_type", "constant_charge_current",
                 "constant_charge_voltage", "charge_control_limit", "charge_control_limit_min", "charge_control_limit_max",
                 "charge_control_start_threshold", "charge_control_end_threshold", "charge_counter", "charge_now", "charge_full", "temp", "model_name", "manufacturer",
-                "fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update"),
+                "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update",
+                "mmi_charging_enable", "stop_charging_enable", "charger_ic", "chargerid_volt",
+                "internal_capacity", "usb_status", "typec_cc_orientation", "typec_sbu_voltage"),
             2)
         appendLine()
         appendSection("USB TYPE-C PORT / PARTNER ROLE AND MODE", File("/sys/class/typec"),
@@ -51,9 +53,10 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine()
         appendLine("CONTROL SAFETY")
         appendLine("No attributes were written. Writable status is an access check only, not proof that changing a value is safe.")
-        appendLine("Oplus kernel-source audit targets (when exposed by this firmware): battery/fast_charge, battery/voocchg_ing, battery/charge_technology and battery/adapter_fw_update.")
-        appendLine("fast_charge is the Oplus VOOC fast-charge UI indicator; voocchg_ing reads the driver fastchg_ing state. Neither reports USB VBUS/IBUS or the exact adapter contract.")
-        appendLine("charge_technology and adapter_fw_update are raw driver enum/status values; BatteryScope does not guess their meanings.")
+        appendLine("Oplus kernel-source audit targets (when exposed by this firmware): battery/fastcharger, battery/voocchg_ing, battery/charge_technology, battery/adapter_fw_update and usb/fast_chg_type.")
+        appendLine("fastcharger is the Oplus VOOC fast-charge UI indicator; voocchg_ing reads the driver fastchg_ing state. Neither reports USB VBUS/IBUS or the exact adapter contract.")
+        appendLine("fast_chg_type is a driver-reported charger subtype code; BatteryScope preserves it raw. Vendor enums/status values are not guessed.
+        appendLine("mmi_charging_enable and stop_charging_enable are read-only observations in this app; no write is attempted.")")
         appendLine("No USB role, voltage, current limit, charging mode, or protocol negotiation was changed.")
         appendLine("A missing node means not exposed at this path; it does not prove the hardware lacks that capability.")
     }
