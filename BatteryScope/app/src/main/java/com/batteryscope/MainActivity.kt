@@ -255,14 +255,14 @@ class MainActivity : Activity() {
             if (external.isEmpty()) {
                 appendLine("No readable USB / AC / charger attributes found.")
             } else {
-                external.forEach { (key, value) -> appendLine("$key = $value") }
+                external.forEach { (key, value) -> appendLine(formatSupplyValue(key, value)) }
             }
             appendLine()
             appendLine("BATTERY / BMS KERNEL NODES")
             if (batteryNode.isEmpty()) {
                 append("No readable battery sysfs attributes found.")
             } else {
-                batteryNode.forEach { (key, value) -> appendLine("$key = $value") }
+                batteryNode.forEach { (key, value) -> appendLine(formatSupplyValue(key, value)) }
             }
         }
 
@@ -294,6 +294,26 @@ class MainActivity : Activity() {
             ).joinToString(",")
             csv.append(row).append('\n')
         }
+    }
+
+    private fun formatSupplyValue(key: String, raw: String): String {
+        val field = key.substringAfter('/')
+        val number = raw.toLongOrNull()
+        val converted = when (field) {
+            "voltage_now", "voltage_avg", "voltage_max", "input_voltage_limit",
+            "constant_charge_voltage", "constant_charge_voltage_max", "voltage_limit", "max_voltage" ->
+                number?.let { String.format(Locale.US, "  [%.3f V; raw µV]", it / 1_000_000.0) }
+            "current_now", "current_avg", "current_max", "input_current_limit",
+            "constant_charge_current", "constant_charge_current_max", "current_limit", "max_current" ->
+                number?.let { String.format(Locale.US, "  [%.1f mA; raw µA]", it / 1000.0) }
+            "power_now" ->
+                number?.let { String.format(Locale.US, "  [%.3f W; raw µW]", it / 1_000_000.0) }
+            "charge_counter", "charge_now", "charge_full", "charge_full_design" ->
+                number?.let { String.format(Locale.US, "  [%.1f mAh; raw µAh]", it / 1000.0) }
+            "capacity" -> number?.let { "  [$it %]" }
+            else -> null
+        }
+        return "$key = $raw${converted ?: ""}"
     }
 
     private fun protocolSummary(supplies: Map<String, String>): String {
