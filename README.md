@@ -1,5 +1,15 @@
 # AI Operations Platform
 
+## Projects in this repository
+
+This repository contains two independent projects. Their dependencies, CI workflows and release processes must remain separate.
+
+- **AI Operations Platform (Python):** the root project. See [Project index](docs/PROJECT_INDEX.md).
+- **BatteryScope (Android):** [BatteryScope project](BatteryScope/README.md) · [engineering audit](BatteryScope/AUDIT.md) · [release checklist](BatteryScope/RELEASE_CHECKLIST.md) · [change history](BatteryScope/CHANGELOG.md).
+
+Repository working rules: [AGENTS.md](AGENTS.md). BatteryScope-specific engineering rules: [BatteryScope/AGENTS.md](BatteryScope/AGENTS.md).
+
+
 A local-first AI workbench for auditable extraction, research, workflow automation and multi-model operations. Core features run without paid APIs or hosted services.
 
 ## Core design rules
