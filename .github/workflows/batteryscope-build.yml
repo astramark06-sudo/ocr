@@ -1,4 +1,5 @@
 name: Build BatteryScope APK
+
 on:
   workflow_dispatch:
   push:
@@ -6,31 +7,83 @@ on:
     paths:
       - 'BatteryScope/**'
       - '.github/workflows/batteryscope-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: batteryscope-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build and verify debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+
       - name: Install Android 35 SDK
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Validate project identity and launcher resources
+        working-directory: BatteryScope
+        run: |
+          set -euo pipefail
+          grep -q 'applicationId = "com.batteryscope"' app/build.gradle.kts
+          grep -q 'versionCode = ' app/build.gradle.kts
+          grep -q 'versionName = ' app/build.gradle.kts
+          grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
+          test -s app/src/main/res/drawable/ic_batteryscope_foreground.xml
+          test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          test -s app/src/main/res/values/batteryscope_icon_colors.xml
+
       - name: Build debug APK
         working-directory: BatteryScope
-        run: gradle --no-daemon assembleDebug
-      - name: Verify APK output
-        run: test -s BatteryScope/app/build/outputs/apk/debug/app-debug.apk
-      - uses: actions/upload-artifact@v4
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK package and metadata
+        id: verify
+        run: |
+          set -euo pipefail
+          APK="BatteryScope/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$AAPT" dump badging "$APK" > /tmp/batteryscope-badging.txt
+          grep -q "package: name='com.batteryscope'" /tmp/batteryscope-badging.txt
+          VERSION_NAME=$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" /tmp/batteryscope-badging.txt | head -n1)
+          VERSION_CODE=$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/batteryscope-badging.txt | head -n1)
+          SHA256=$(sha256sum "$APK" | awk '{print $1}')
+          mkdir -p release
+          cp "$APK" release/BatteryScope-debug.apk
+          printf 'App: BatteryScope\nApplication ID: com.batteryscope\nVersion name: %s\nVersion code: %s\nCommit: %s\nSHA-256: %s\nBuild type: debug\n' "$VERSION_NAME" "$VERSION_CODE" "$GITHUB_SHA" "$SHA256" | tee release/BUILD-INFO.txt
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
         with:
-          name: BatteryScope-debug-apk
-          path: BatteryScope/app/build/outputs/apk/debug/app-debug.apk
+          name: BatteryScope-${{ steps.verify.outputs.version_name }}-debug-${{ github.sha }}
+          path: |
+            release/BatteryScope-debug.apk
+            release/BUILD-INFO.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
