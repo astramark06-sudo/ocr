@@ -89,8 +89,10 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine("Timestamp: ${System.currentTimeMillis()}")
         appendQuickSection("POWER SUPPLY / CHARGER / BATTERY", File("/sys/class/power_supply"),
             setOf("type", "online", "present", "status", "voltage_now", "voltage_avg",
-                "current_now", "current_avg", "power_now", "usb_type", "real_type",
-                "charge_type", "fastcharger", "fast_chg_type", "voocchg_ing",
+                "current_now", "current_avg", "power_now", "input_current_limit",
+                "input_voltage_limit", "input_power_limit", "constant_charge_current",
+                "constant_charge_voltage", "usb_type", "real_type", "charge_type",
+                "fastcharger", "fast_chg_type", "voocchg_ing",
                 "charge_technology", "adapter_fw_update", "cool_down"), 2)
         appendQuickSection("USB TYPE-C PORT / PARTNER", File("/sys/class/typec"),
             setOf("power_role", "data_role", "port_type", "power_operation_mode",
