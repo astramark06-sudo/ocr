@@ -349,7 +349,7 @@ class MainActivity : Activity() {
 
     private fun buildCommunicationSummary(report: String): String {
         val keys = listOf(
-            "power_role", "data_role", "port_type", "power_operation_mode",
+            "power_role", "data_role", "port_type", "power_operation_mode", "online",
             "usb_power_delivery_revision", "usb_typec_revision", "usb_type",
             "real_type", "charge_type", "voltage_now", "current_now",
             "input_current_limit", "input_voltage_limit", "source-capabilities",
@@ -357,12 +357,16 @@ class MainActivity : Activity() {
         )
         val matches = report.lineSequence().filter { line ->
             val lower = line.lowercase(Locale.US)
-            keys.any { lower.contains(it) } &&
-                (lower.contains("/sys/class/typec/") ||
-                 lower.contains("/sys/class/usb_power_delivery/") ||
-                 lower.contains("/sys/class/power_supply/") ||
-                 lower.contains("/sys/class/dual_role_usb/") ||
-                 lower.contains("/sys/class/usb_role/"))
+            val batteryPowerSupply = Regex("/sys/class/power_supply/(battery|bms|main)/").containsMatchIn(lower)
+            val knownCommunicationPath =
+                lower.contains("/sys/class/typec/") ||
+                lower.contains("/sys/class/usb_power_delivery/") ||
+                lower.contains("/sys/class/dual_role_usb/") ||
+                lower.contains("/sys/class/usb_role/") ||
+                (lower.contains("/sys/class/power_supply/") && !batteryPowerSupply)
+            val hasProtocolField = keys.any { lower.contains(it) } ||
+                (lower.contains("type =") && lower.contains("usb"))
+            knownCommunicationPath && hasProtocolField
         }.distinct().take(45).toList()
 
         return buildString {
@@ -393,7 +397,7 @@ class MainActivity : Activity() {
                 lower.contains("input_current_limit") ||
                 lower.contains("input_voltage_limit") ||
                 lower.contains("input_power_limit")
-            isChargeLimit && lower.contains("write access appears available")
+            isChargeLimit && lower.contains("dac access check: readable and writable")
         }.toList()
         return buildString {
             appendLine("CONTROL STATUS: LOCKED")
@@ -635,7 +639,7 @@ class MainActivity : Activity() {
         Shizuku.removeBinderDeadListener(binderDeadListener)
         Shizuku.removeRequestPermissionResultListener(permissionListener)
         try {
-            if (Shizuku.pingBinder() && serviceBindingRequested.not()) {
+            if (Shizuku.pingBinder()) {
                 Shizuku.unbindUserService(diagnosticArgs, userServiceConnection, true)
             }
         } catch (_: Throwable) { }
