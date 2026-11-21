@@ -10,7 +10,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Runs inside the Shizuku UserService process (ADB shell UID or root UID).
- * This service is intentionally read-only. It never opens a sysfs node for writing.
+ * The audit and live snapshot are read-only. The only write is the fixed, bounded
+ * Oplus cool_down property, available only after a separately confirmed user action.
  */
 class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
 
@@ -75,6 +76,58 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine("mmi_charging_enable and stop_charging_enable are read-only observations in this app; no write is attempted.")
         appendLine("No USB role, voltage, current limit, charging mode, or protocol negotiation was changed.")
         appendLine("A missing node means not exposed at this path; it does not prove the hardware lacks that capability.")
+    }
+
+    override fun snapshotLink(): String = buildString {
+        appendLine("BATTERYSCOPE LIVE POWER-PATH SAMPLE")
+        appendLine("Timestamp: ${System.currentTimeMillis()}")
+        appendQuickSection("POWER SUPPLY / CHARGER / BATTERY", File("/sys/class/power_supply"),
+            setOf("type", "online", "present", "status", "voltage_now", "voltage_avg",
+                "current_now", "current_avg", "power_now", "usb_type", "real_type",
+                "charge_type", "fastcharger", "fast_chg_type", "voocchg_ing",
+                "charge_technology", "adapter_fw_update", "cool_down"), 2)
+        appendQuickSection("USB TYPE-C PORT / PARTNER", File("/sys/class/typec"),
+            setOf("power_role", "data_role", "port_type", "power_operation_mode",
+                "vconn_source", "usb_power_delivery_revision", "usb_typec_revision",
+                "orientation", "preferred_role", "svid", "mode", "active"), 3)
+        appendQuickSection("USB POWER DELIVERY", File("/sys/class/usb_power_delivery"),
+            setOf("revision", "voltage", "maximum_current", "operational_current",
+                "peak_current", "power", "current", "type"), 4)
+        appendLine("Poll type: live sysfs snapshot; not a packet capture or electrical waveform.")
+    }
+
+    private fun StringBuilder.appendQuickSection(
+        title: String,
+        root: File,
+        allowed: Set<String>,
+        maxDepth: Int
+    ) {
+        appendLine("=== $title ===")
+        if (!root.exists()) {
+            appendLine("NOT EXPOSED: ${root.path}")
+            return
+        }
+        var count = 0
+        fun walk(dir: File, depth: Int) {
+            if (depth > maxDepth || count >= 80) return
+            val children = try { dir.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null }
+            if (children == null) {
+                appendLine("LIST DENIED: ${dir.path}")
+                return
+            }
+            for (child in children) {
+                if (count >= 80) break
+                if (child.isDirectory) {
+                    walk(child, depth + 1)
+                } else if (child.isFile && child.name in allowed) {
+                    count++
+                    appendLine("${child.path} = ${readOneLine(child)}")
+                }
+            }
+        }
+        walk(root, 0)
+        if (count == 0) appendLine("No readable matching attributes.")
+        if (count >= 80) appendLine("Live snapshot limit reached.")
     }
 
     private fun readSmartChargerConfig(): String {
