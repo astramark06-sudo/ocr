@@ -45,7 +45,11 @@ class MainActivity : Activity() {
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var logging = false
-    private var csv = StringBuilder()
+    private var csvWriter: java.io.BufferedWriter? = null
+    private var csvFile: File? = null
+    private var sessionTimestamp: String? = null
+    private var csvSampleCount = 0L
+    private var controlHistory = StringBuilder()
     private var latestDiagnosticReport = ""
     private var latestDiagnosticTimeMs = 0L
     private var remoteService: IBatteryDiagnosticsService? = null
@@ -821,7 +825,20 @@ class MainActivity : Activity() {
                 reading.technology,
                 csvEscape(JSONObject(reading.supplies).toString())
             ).joinToString(",")
-            csv.append(row).append('\n')
+            try {
+                val writer = csvWriter ?: throw IllegalStateException("CSV writer is not open")
+                writer.write(row)
+                writer.newLine()
+                csvSampleCount++
+                if (csvSampleCount % 10L == 0L) writer.flush()
+            } catch (t: Throwable) {
+                logging = false
+                try { csvWriter?.close() } catch (_: Throwable) { }
+                csvWriter = null
+                startButton.isEnabled = true
+                stopButton.isEnabled = false
+                statusText.text = "CSV logging stopped: ${t.javaClass.simpleName}: ${t.message ?: "write error"}"
+            }
         }
     }
 
@@ -866,31 +883,63 @@ class MainActivity : Activity() {
 
     private fun startLogging() {
         if (logging) return
-        logging = true
-        csv = StringBuilder("timestamp_ms,battery_percent,battery_status,plug_type,battery_voltage_mv,battery_current_ua,battery_average_current_ua,charge_counter_uah,energy_counter_nwh,temperature_c,battery_health,technology,app_uid_sysfs_json\n")
-        startButton.isEnabled = false
-        stopButton.isEnabled = true
-        refreshReadings()
+        try {
+            val directory = getExternalFilesDir(null) ?: filesDir
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val file = File(directory, "BatteryScope_$timestamp.csv")
+            val writer = file.bufferedWriter(Charsets.UTF_8)
+            writer.write("timestamp_ms,battery_percent,battery_status,plug_type,battery_voltage_mv,battery_current_ua,battery_average_current_ua,charge_counter_uah,energy_counter_nwh,temperature_c,battery_health,technology,app_uid_sysfs_json")
+            writer.newLine()
+            writer.flush()
+            csvFile = file
+            csvWriter = writer
+            sessionTimestamp = timestamp
+            csvSampleCount = 0L
+            logging = true
+            startButton.isEnabled = false
+            stopButton.isEnabled = true
+            statusText.text = "CSV logging: \${file.name}"
+            refreshReadings()
+        } catch (t: Throwable) {
+            logging = false
+            startButton.isEnabled = true
+            stopButton.isEnabled = false
+            statusText.text = "CSV START FAILED: \${t.javaClass.simpleName}: \${t.message ?: "unknown"}"
+        }
     }
 
     private fun stopLogging() {
         logging = false
         startButton.isEnabled = true
         stopButton.isEnabled = false
+        var closeError: String? = null
         try {
-            val directory = getExternalFilesDir(null) ?: filesDir
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val file = File(directory, "BatteryScope_$timestamp.csv")
-            file.writeText(csv.toString())
-            val reportFile = if (latestDiagnosticReport.isNotBlank()) {
-                File(directory, "BatteryScope_$timestamp-shizuku-audit.txt").apply {
-                    writeText("Scan time: $latestDiagnosticTimeMs\n\n$latestDiagnosticReport\n\nLATEST LIVE SAMPLE\n$latestLinkSnapshot")
-                }
-            } else null
-            statusText.text = "CSV saved in app files: ${file.name}" +
-                (reportFile?.let { "\nDiagnostic audit: ${it.name}" } ?: "")
+            csvWriter?.flush()
+            csvWriter?.close()
         } catch (t: Throwable) {
-            statusText.text = "CSV EXPORT FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+            closeError = "\${t.javaClass.simpleName}: \${t.message ?: "close error"}"
+        } finally {
+            csvWriter = null
+        }
+        val file = csvFile
+        val timestamp = sessionTimestamp
+            ?: SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        var reportFile: File? = null
+        try {
+            if (latestDiagnosticReport.isNotBlank() || latestLinkSnapshot.isNotBlank() || controlHistory.isNotEmpty()) {
+                val directory = getExternalFilesDir(null) ?: filesDir
+                reportFile = File(directory, "BatteryScope_\${timestamp}-diagnostics.txt")
+                reportFile.writeText(
+                    "FULL SHIZUKU AUDIT\\n$latestDiagnosticReport\\n\\nLATEST LIVE POWER-PATH SAMPLE\\n$latestLinkSnapshot\\n\\nCONTROL ACTION HISTORY\\n$controlHistory"
+                )
+            }
+            statusText.text = buildString {
+                appendLine(if (file != null) "CSV saved: \${file.name} ($csvSampleCount samples)" else "No CSV file was created.")
+                if (reportFile != null) appendLine("Diagnostics saved: \${reportFile.name}")
+                if (closeError != null) appendLine("CSV close warning: $closeError")
+            }.trim()
+        } catch (t: Throwable) {
+            statusText.text = "EXPORT FAILED: \${t.javaClass.simpleName}: \${t.message ?: "unknown"}"
         }
     }
 
