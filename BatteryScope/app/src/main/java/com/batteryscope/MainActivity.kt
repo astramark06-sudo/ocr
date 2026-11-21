@@ -32,7 +32,6 @@ class MainActivity : Activity() {
     private var csv = StringBuilder()
     private val sampler = object : Runnable {
         override fun run() {
-            if (!logging) return
             refreshReadings()
             handler.postDelayed(this, 1000L)
         }
@@ -66,6 +65,17 @@ class MainActivity : Activity() {
         batteryManager = getSystemService(BATTERY_SERVICE) as BatteryManager
         buildUi()
         refreshReadings()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        handler.removeCallbacks(sampler)
+        handler.post(sampler)
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(sampler)
+        super.onPause()
     }
 
     private fun buildUi() {
@@ -334,12 +344,10 @@ class MainActivity : Activity() {
         startButton.isEnabled = false
         stopButton.isEnabled = true
         refreshReadings()
-        handler.postDelayed(sampler, 1000L)
     }
 
     private fun stopLogging() {
         logging = false
-        handler.removeCallbacks(sampler)
         startButton.isEnabled = true
         stopButton.isEnabled = false
         try {
