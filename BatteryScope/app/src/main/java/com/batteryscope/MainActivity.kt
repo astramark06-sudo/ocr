@@ -132,7 +132,8 @@ class MainActivity : Activity() {
         "constant_charge_current_max", "constant_charge_voltage_max",
         "charge_control_limit", "charge_control_limit_max",
         "charge_control_start_threshold", "charge_control_end_threshold",
-        "current_limit", "voltage_limit", "max_voltage", "max_current"
+        "current_limit", "voltage_limit", "max_voltage", "max_current",
+        "fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -585,7 +586,9 @@ class MainActivity : Activity() {
     private fun formatSupplyValue(key: String, raw: String): String {
         val field = key.substringAfter('/')
         val number = raw.toLongOrNull()
-        val converted = when (field) {
+        val vendorRawOnly = field in setOf("fast_charge", "voocchg_ing", "charge_technology", "adapter_fw_update") ||
+            (key.startsWith("battery/") && field == "current_max")
+        val converted = if (vendorRawOnly) null else when (field) {
             "voltage_now", "voltage_avg", "voltage_max", "voltage_min",
             "input_voltage_limit", "constant_charge_voltage", "constant_charge_voltage_max", "voltage_limit", "max_voltage" ->
                 number?.let { String.format(Locale.US, "  [%.3f V; raw µV]", it / 1_000_000.0) }
@@ -600,7 +603,15 @@ class MainActivity : Activity() {
             "capacity", "charge_control_start_threshold", "charge_control_end_threshold" -> number?.let { "  [$it %]" }
             else -> null
         }
-        return "$key = $raw${converted ?: ""}"
+        val annotation = when (field) {
+            "fast_charge" -> "  [vendor boolean; VOOC UI indicator]"
+            "voocchg_ing" -> "  [vendor boolean; VOOC in-progress state]"
+            "charge_technology" -> "  [vendor enum; raw value only]"
+            "adapter_fw_update" -> "  [vendor state; raw value only]"
+            "current_max" -> if (key.startsWith("battery/")) "  [vendor-specific units not assumed]" else (converted ?: "")
+            else -> converted ?: ""
+        }
+        return "$key = $raw$annotation"
     }
 
     private fun csvEscape(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
