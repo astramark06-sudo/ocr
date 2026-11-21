@@ -136,7 +136,7 @@ class MainActivity : Activity() {
         "constant_charge_current_max", "constant_charge_voltage_max",
         "charge_control_limit", "charge_control_limit_max",
         "charge_control_start_threshold", "charge_control_end_threshold",
-        "current_limit", "voltage_limit", "max_voltage", "max_current",
+        "current_limit", "voltage_limit", "max_voltage", "max_current", "cool_down",
         "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update", "mmi_charging_enable", "stop_charging_enable", "chargerid_volt", "charger_ic", "usb_status", "typec_cc_orientation", "typec_sbu_voltage"
     )
 
@@ -457,10 +457,10 @@ class MainActivity : Activity() {
             .firstOrNull { it.startsWith("Current driver level:") }
             ?.substringAfter(":")?.trim()
         return buildString {
-            appendLine("Oplus COOL_DOWN node: \${if (present) "PRESENT" else "NOT EXPOSED"}")
-            appendLine("ADB-shell read access: \${if (readable) "YES" else "NO"}")
-            appendLine("ADB-shell write access: \${if (writable) "YES (permission check only)" else "NO"}")
-            appendLine("Current driver level: \${current ?: "UNAVAILABLE"}")
+            appendLine("Oplus COOL_DOWN node: ${if (present) "PRESENT" else "NOT EXPOSED"}")
+            appendLine("ADB-shell read access: ${if (readable) "YES" else "NO"}")
+            appendLine("ADB-shell write access: ${if (writable) "YES (permission check only)" else "NO"}")
+            appendLine("Current driver level: ${current ?: "UNAVAILABLE"}")
             appendLine("Accepted reference levels: 0 (restore OEM defaults), 1..6 (input-current limit steps)")
             appendLine("No value is written during a scan.")
             if (!present) {
@@ -561,7 +561,7 @@ class MainActivity : Activity() {
             val result = try {
                 service.setCoolDown(level)
             } catch (t: Throwable) {
-                "CONTROL CALL FAILED: \${t.javaClass.simpleName}: \${t.message ?: "unknown"}"
+                "CONTROL CALL FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
             }
             runOnUiThread {
                 controlText.text = result
