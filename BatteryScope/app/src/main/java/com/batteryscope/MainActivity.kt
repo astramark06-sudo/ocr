@@ -449,18 +449,9 @@ class MainActivity : Activity() {
         val timeLabel = timestamp?.let {
             SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date(it))
         } ?: "unknown"
-        val keys = listOf(
-            "online", "status", "voltage_now", "voltage_avg", "current_now",
-            "current_avg", "power_now", "usb_type", "real_type", "charge_type",
-            "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology",
-            "adapter_fw_update", "cool_down", "input_current_limit", "input_voltage_limit",
-            "input_power_limit", "constant_charge_current", "constant_charge_voltage",
-            "power_role", "data_role", "port_type", "power_operation_mode", "operational_current",
-            "maximum_current"
-        )
-        val rows = snapshot.lineSequence().filter { line ->
-            line.startsWith("/sys/") && keys.any { line.contains("/$it =") }
-        }.take(60).toList()
+        val rows = snapshot.lineSequence()
+            .filter { it.startsWith("/sys/") }
+            .take(120).toList()
         return buildString {
             appendLine("Last sample: $timeLabel  •  target poll: 2 seconds")
             if (rows.isEmpty()) {
@@ -712,14 +703,19 @@ class MainActivity : Activity() {
         val dirs = try { root.listFiles() } catch (_: Throwable) { null }
             ?: return Pair(emptyMap(), false)
         val result = linkedMapOf<String, String>()
+        val excluded = setOf("device", "subsystem", "driver", "power", "firmware_node", "of_node")
         for (dir in dirs.sortedBy { it.name }) {
             if (!dir.isDirectory) continue
-            for (attribute in supplyAttributes) {
-                val file = File(dir, attribute)
-                if (!file.isFile) continue
-                val value = try { file.inputStream().bufferedReader().use { it.readLine()?.trim()?.take(180) } }
-                catch (_: Throwable) { null }
-                if (!value.isNullOrBlank()) result["${dir.name}/$attribute"] = value
+            val attributes = try { dir.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null } ?: continue
+            for (file in attributes) {
+                if (file.name in excluded || !file.isFile) continue
+                val value = try {
+                    if (!file.canRead()) "READ_DENIED"
+                    else file.inputStream().bufferedReader().use { it.readLine()?.trim()?.take(240) ?: "EMPTY" }
+                } catch (t: Throwable) {
+                    "ERROR:${t.javaClass.simpleName}:${t.message ?: "unknown"}".take(240)
+                }
+                result["${dir.name}/${file.name}"] = value
             }
         }
         return Pair(result, true)
