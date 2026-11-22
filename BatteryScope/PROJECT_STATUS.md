@@ -29,9 +29,13 @@ Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 
 ## Verification state — do not overclaim
 - Source files and documentation were read back from the `batteryscope` branch after updates.
-- The current GitHub branch head is the commit that hardens the APK build workflow; see the branch history for the exact SHA.
-- The GitHub combined-status API returned no status entries at the time of the last check. This is not evidence of a successful build.
-- No APK from this latest 1.8 source has been downloaded, inspected or install-tested in this handoff.
+- Verified source commit: `700e6ac63be78f65a2d08b45bef367b79badef03`.
+- GitHub Actions BatteryScope build run #91 (ID `44992143220`) passed, including APK package/metadata verification and artifact upload: https://github.com/astramark06-sudo/test/actions/runs/44992143220
+- Verified artifact: `BatteryScope-1.8-debug-700e6ac63be78f65a2d08b45bef367b79badef03` (artifact ID `14742337632`).
+- Artifact ZIP: 894,165 bytes; entries `BatteryScope-debug.apk` and `BUILD-INFO.txt`; ZIP integrity check passed.
+- APK: 901,602 bytes; application ID `com.batteryscope`; version `1.8`; versionCode `9`; SHA-256 `f29947e6a93e231767eac3e343266f5bee87ca625bdaa3617042d4fc882db260`.
+- Artifact ZIP SHA-256: `6dd1bc94bc9f7804c842190ec8a9e390ec561325df98044b798ad398ea593656`.
+- CI/package verification and artifact integrity passed. The APK has not been installed or runtime-tested on the physical RMX2161.
 - No physical RMX2161 runtime test has been performed for the 1.8 changes.
 - The source inventory is broader but does not prove the retail ROM exposes VBUS/IBUS. The actual handset audit is still required to discover readable nodes and values.
 - v1.8 remains activity-bound for its CSV sampler and Shizuku live poll. It does not yet provide 24-hour background recording; leaving the app screen can still stop continuous logging/polling.
@@ -40,9 +44,9 @@ Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 - The repository does not yet have a dedicated automated Android unit/instrumentation test suite.
 
 ## Next actions
-1. Check the GitHub Actions run triggered by the latest BatteryScope workflow change. Confirm the run commit matches the current branch head.
-2. If build passes, download that run's artifact; verify ZIP entries, APK package/version, icon resource and SHA-256.
-3. If build fails, fix only the failing issue, keep unrelated source untouched, increment version only if a new APK is produced, then rebuild.
+1. Install/update the 1.8 APK on RMX2161 and run the expanded Shizuku audit while unplugged, charging, and during active phone use.
+2. Export the full diagnostic report and inspect which charger-side voltage/current/power nodes actually exist and are readable.
+3. Implement the separate persistent 24-hour recorder; the current CSV and Shizuku samplers remain activity-bound.
 4. Add tests for pure conversion/validation logic without broad UI refactoring.
 5. On the handset, verify launcher icon, install-over-update behavior, document picker, live telemetry and Shizuku flow.
 6. Investigate FCC/design-capacity exposure using actual RMX2161 runtime data; do not infer it from charge counter divided by percentage.
