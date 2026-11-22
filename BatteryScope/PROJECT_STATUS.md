@@ -33,6 +33,7 @@ Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 - The GitHub combined-status API returned no status entries at the time of the last check. This is not evidence of a successful build.
 - No APK from this latest 1.8 source has been downloaded, inspected or install-tested in this handoff.
 - No physical RMX2161 runtime test has been performed for the 1.8 changes.
+- The source inventory is broader but does not prove the retail ROM exposes VBUS/IBUS. The actual handset audit is still required to discover readable nodes and values.
 - v1.8 remains activity-bound for its CSV sampler and Shizuku live poll. It does not yet provide 24-hour background recording; leaving the app screen can still stop continuous logging/polling.
 - There is no verified full-charge-capacity (FCC) reading yet. BatteryManager CHARGE_COUNTER is not FCC.
 - The diagnostics text report still saves to app-specific storage; only CSV has user-selected document export.
