@@ -2,6 +2,14 @@
 
 All versions are debug APK development builds unless a signed release is explicitly documented.
 
+## 1.8 — expanded power-path discovery
+- Shizuku full audit now inventories readable attributes under power-supply, Type-C, USB-PD, USB-role, thermal-zone and hardware-monitor class trees rather than relying only on a fixed property-name whitelist.
+- Live Shizuku snapshots include discovered attributes from these class trees, subject to explicit depth and output caps.
+- Added Android thermal-service and power-service dumpsys sections to the full audit.
+- The ordinary app process now inventories all direct attributes exposed under each power-supply class entry; unreadable and failed reads remain explicitly labelled.
+- Preserved raw values, source paths and the read-only charging-control boundary.
+- Version code: 9.
+
 ## 1.7 — launcher identity
 - Added Android adaptive launcher icon and round-icon resource.
 - Configured manifest launcher icon references.
