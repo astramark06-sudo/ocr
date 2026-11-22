@@ -39,28 +39,43 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update",
                 "mmi_charging_enable", "stop_charging_enable", "charger_ic", "chargerid_volt",
                 "internal_capacity", "usb_status", "typec_cc_orientation", "typec_sbu_voltage", "cool_down"),
-            2)
+            2, discoverAll = true, maxFiles = 400)
         appendLine()
         appendSection("USB TYPE-C PORT / PARTNER ROLE AND MODE", File("/sys/class/typec"),
             setOf("data_role", "power_role", "port_type", "power_operation_mode", "vconn_source",
                 "usb_power_delivery_revision", "usb_typec_revision", "orientation",
                 "preferred_role", "supported_power_roles", "supported_data_roles",
-                "accessory_mode", "identity", "svid", "mode", "active"), 3)
+                "accessory_mode", "identity", "svid", "mode", "active"), 3,
+            discoverAll = true, maxFiles = 300)
         appendLine()
         appendSection("USB POWER DELIVERY CAPABILITIES / PDO DATA", File("/sys/class/usb_power_delivery"),
             setOf("revision", "version", "voltage", "maximum_current", "operational_current",
                 "peak_current", "power", "current", "type", "dual_role_power",
                 "usb_suspend_supported", "unconstrained_power", "usb_communications_capable",
-                "dual_role_data", "unchunked_extended_messages"), 5)
+                "dual_role_data", "unchunked_extended_messages"), 5,
+            discoverAll = true, maxFiles = 300)
         appendLine()
         appendSection("LEGACY USB ROLE NODES", File("/sys/class/dual_role_usb"),
-            setOf("mode", "power_role", "data_role", "power_type", "supports_usb_power_delivery"), 2)
+            setOf("mode", "power_role", "data_role", "power_type", "supports_usb_power_delivery"), 2,
+            discoverAll = true, maxFiles = 160)
         appendSection("USB ROLE SWITCH NODES", File("/sys/class/usb_role"),
-            setOf("role"), 2)
+            setOf("role"), 2, discoverAll = true, maxFiles = 120)
+        appendLine()
+        appendSection("THERMAL ZONES", File("/sys/class/thermal"),
+            setOf("type", "temp", "mode", "policy", "available_policies"), 2,
+            discoverAll = true, maxFiles = 300)
+        appendLine()
+        appendSection("HARDWARE MONITOR SENSORS", File("/sys/class/hwmon"),
+            setOf("name", "temp1_input", "curr1_input", "in1_input", "power1_input"), 2,
+            discoverAll = true, maxFiles = 300)
         appendLine()
         appendSection("ANDROID FRAMEWORK: dumpsys battery", null, emptySet(), 0, "dumpsys battery")
         appendLine()
         appendSection("ANDROID FRAMEWORK: dumpsys usb", null, emptySet(), 0, "dumpsys usb")
+        appendLine()
+        appendSection("ANDROID FRAMEWORK: dumpsys thermalservice", null, emptySet(), 0, "dumpsys thermalservice")
+        appendLine()
+        appendSection("ANDROID FRAMEWORK: dumpsys power", null, emptySet(), 0, "dumpsys power")
         appendLine()
         appendLine("=== OPLUS COOL_DOWN CURRENT-LIMITER CAPABILITY ===")
         val coolDownNode = File("/sys/class/power_supply/battery/cool_down")
@@ -93,14 +108,19 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 "input_voltage_limit", "input_power_limit", "constant_charge_current",
                 "constant_charge_voltage", "usb_type", "real_type", "charge_type",
                 "fastcharger", "fast_chg_type", "voocchg_ing",
-                "charge_technology", "adapter_fw_update", "cool_down"), 2)
+                "charge_technology", "adapter_fw_update", "cool_down"), 2, discoverAll = true)
         appendQuickSection("USB TYPE-C PORT / PARTNER", File("/sys/class/typec"),
             setOf("power_role", "data_role", "port_type", "power_operation_mode",
                 "vconn_source", "usb_power_delivery_revision", "usb_typec_revision",
-                "orientation", "preferred_role", "svid", "mode", "active"), 3)
+                "orientation", "preferred_role", "svid", "mode", "active"), 3, discoverAll = true)
         appendQuickSection("USB POWER DELIVERY", File("/sys/class/usb_power_delivery"),
             setOf("revision", "voltage", "maximum_current", "operational_current",
-                "peak_current", "power", "current", "type"), 4)
+                "peak_current", "power", "current", "type"), 4, discoverAll = true)
+        appendQuickSection("THERMAL ZONES", File("/sys/class/thermal"),
+            setOf("type", "temp", "mode", "policy"), 2, discoverAll = true)
+        appendQuickSection("HARDWARE MONITOR SENSORS", File("/sys/class/hwmon"),
+            setOf("name", "temp1_input", "curr1_input", "in1_input", "power1_input"), 2,
+            discoverAll = true)
         appendLine("Poll type: live sysfs snapshot; not a packet capture or electrical waveform.")
     }
 
@@ -108,7 +128,8 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         title: String,
         root: File,
         allowed: Set<String>,
-        maxDepth: Int
+        maxDepth: Int,
+        discoverAll: Boolean = false
     ) {
         appendLine("=== $title ===")
         if (!root.exists()) {
@@ -117,26 +138,28 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         }
         var count = 0
         fun walk(dir: File, depth: Int) {
-            if (depth > maxDepth || count >= 80) return
+            if (depth > maxDepth || count >= 160) return
             val children = try { dir.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null }
             if (children == null) {
                 appendLine("LIST DENIED: ${dir.path}")
                 return
             }
             for (child in children) {
-                if (count >= 80) break
+                if (count >= 160) break
                 if (child.isDirectory) {
-                    walk(child, depth + 1)
-                } else if (child.isFile && child.name in allowed) {
+                    if (child.name !in SYSFS_LINK_DIRS_TO_SKIP) walk(child, depth + 1)
+                } else if (child.isFile && (discoverAll || child.name in allowed)) {
                     count++
-                    appendLine("${child.path} = ${readOneLine(child)}")
+                    appendLine("${child.path} = ${readOneLine(child)}  [${if (child.canRead()) "READ" else "DENIED"}]")
                 }
             }
         }
         walk(root, 0)
         if (count == 0) appendLine("No readable matching attributes.")
-        if (count >= 80) appendLine("Live snapshot limit reached.")
+        if (count >= 160) appendLine("Live snapshot limit reached.")
     }
+
+    private val SYSFS_LINK_DIRS_TO_SKIP = setOf("device", "subsystem", "driver", "power", "firmware_node", "of_node")
 
     private fun readSmartChargerConfig(): String {
         val config = File("/proc/config.gz")
@@ -193,7 +216,9 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         root: File?,
         allowed: Set<String>,
         maxDepth: Int,
-        command: String? = null
+        command: String? = null,
+        discoverAll: Boolean = false,
+        maxFiles: Int = 180
     ) {
         appendLine("=== $title ===")
         if (command != null) {
@@ -212,17 +237,17 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         }
         var emitted = 0
         fun walk(dir: File, depth: Int) {
-            if (depth > maxDepth || emitted >= 180) return
+            if (depth > maxDepth || emitted >= maxFiles) return
             val children = try { dir.listFiles()?.sortedBy { it.name } } catch (t: Throwable) { null }
             if (children == null) {
                 appendLine("LIST DENIED/FAILED: ${dir.path}")
                 return
             }
             for (child in children) {
-                if (emitted >= 180) break
+                if (emitted >= maxFiles) break
                 if (child.isDirectory) {
-                    walk(child, depth + 1)
-                } else if (child.isFile && child.name in allowed) {
+                    if (child.name !in SYSFS_LINK_DIRS_TO_SKIP) walk(child, depth + 1)
+                } else if (child.isFile && (discoverAll || child.name in allowed)) {
                     emitted++
                     val value = readOneLine(child)
                     val mode = when {
@@ -236,7 +261,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         }
         walk(root, 0)
         if (emitted == 0) appendLine("No matching readable attributes found.")
-        if (emitted >= 180) appendLine("Output cap reached; scan truncated.")
+        if (emitted >= maxFiles) appendLine("Output cap reached at $maxFiles attributes; scan truncated.")
     }
 
     private fun readOneLine(file: File): String {
