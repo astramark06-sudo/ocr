@@ -15,6 +15,8 @@ When Shizuku is running through Android Wireless debugging and BatteryScope is a
 
 - A full audit inventories readable attributes (not only a fixed whitelist) under /sys/class/power_supply, /sys/class/typec, /sys/class/usb_power_delivery, USB-role nodes, thermal zones and hardware-monitor sensor trees. It also captures dumpsys battery, usb, thermalservice and power output.
 - A lightweight live sampler polls discovered power-supply, Type-C, USB-PD, thermal and hardware-monitor attributes every two seconds while the app activity is in the foreground; the full Shizuku audit remains on demand.
+- The full audit also captures Android battery statistics from `dumpsys batterystats --charged`.
+- **Current limitation:** CSV sampling and Shizuku live polling still stop when the app activity pauses. This version is not yet a 24-hour background recorder; keep BatteryScope visible during collection until the persistent recorder is implemented.
 - The inventory uses bounded tree depth and per-tree output caps and skips generic device/subsystem/driver symlink branches to avoid traversing unrelated sysfs trees.
 - The ordinary app process also inventories all direct attributes exposed under each power-supply class entry; unreadable values are marked rather than silently omitted.
 - The app shows the exact sysfs source path and unmodified value. Oplus vendor enums remain raw unless their mapping is verified in the inspected source.
