@@ -19,13 +19,13 @@ Use this checklist for every APK release. A source commit is not itself a releas
 
 ## Build and artifact
 - [ ] Increment versionCode; update versionName.
-- [ ] GitHub Actions build succeeds on the intended branch and commit.
-- [ ] Build job's APK verification step passes.
-- [ ] Artifact upload succeeds.
-- [ ] Download the artifact from that exact run.
-- [ ] Inspect ZIP contents; confirm expected APK path and nonzero size.
-- [ ] Compute SHA-256 and record it with the exact commit/run.
-- [ ] Confirm manifest application ID/version/launcher icon if tooling permits.
+- [x] GitHub Actions build succeeds on the intended branch and commit (run #91; commit `700e6ac63be78f65a2d08b45bef367b79badef03`).
+- [x] Build job's APK verification step passes.
+- [x] Artifact upload succeeds.
+- [x] Download the artifact from that exact run.
+- [x] Inspect ZIP contents; confirm expected APK path and nonzero size.
+- [x] Compute SHA-256 and record it with the exact commit/run.
+- [x] CI aapt verification confirms manifest application ID `com.batteryscope` and APK metadata version 1.8 / versionCode 9.
 - [ ] Confirm artifact is installable as an update over the prior package when device testing is available.
 
 ## Device validation (report separately)
