@@ -77,6 +77,8 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine()
         appendSection("ANDROID FRAMEWORK: dumpsys power", null, emptySet(), 0, "dumpsys power")
         appendLine()
+        appendSection("ANDROID FRAMEWORK: dumpsys batterystats --charged", null, emptySet(), 0, "dumpsys batterystats --charged")
+        appendLine()
         appendLine("=== OPLUS COOL_DOWN CURRENT-LIMITER CAPABILITY ===")
         val coolDownNode = File("/sys/class/power_supply/battery/cool_down")
         appendLine("Node: ${coolDownNode.path}")
