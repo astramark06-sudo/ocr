@@ -60,6 +60,7 @@ The manual Shizuku audit inventories all readable attributes (rather than only a
 - Android dumpsys usb
 - Android dumpsys thermalservice
 - Android dumpsys power
+- Android dumpsys batterystats --charged
 
 The class-tree walk has explicit maximum depths and per-tree attribute caps. It skips generic device, subsystem, driver, power, firmware_node and of_node branches so a class alias does not cause a broad traversal through unrelated /sys/devices content. Attribute values are raw and individual read failures are retained as status text. This is a bounded inventory of relevant exported class interfaces, not a recursive dump of the entire kernel sysfs filesystem.
 
@@ -67,7 +68,7 @@ It reports readable port/partner power and data roles, port mode, charger online
 
 ### Live sampler
 
-After Shizuku connects, a lightweight sampler polls the power-supply, Type-C and USB-PD trees every two seconds. It reports the last sample timestamp and raw source values. It does not execute dumpsys on every poll.
+After Shizuku connects, a lightweight sampler polls discovered power-supply, Type-C, USB-PD, thermal and hardware-monitor attributes every two seconds while the activity is in the foreground. It reports the last sample timestamp and raw source values. It does not execute dumpsys on every poll. The CSV sampler and this Shizuku live poll remain activity-bound; they stop when the activity pauses, so this version is not a 24-hour background recorder.
 
 A missing file or denied read is not represented as zero. The app displays "not exposed", "denied" or "unavailable", according to the evidence received.
 
