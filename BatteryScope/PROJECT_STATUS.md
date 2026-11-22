@@ -2,8 +2,8 @@
 
 Last source organization pass: 2026-11-21
 Active working branch: `batteryscope`
-Current app version: `1.7`
-Current version code: `8`
+Current app version: `1.8`
+Current version code: `9`
 Application ID: `com.batteryscope`
 Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 
@@ -23,6 +23,7 @@ Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 - Charge counter is labelled as remaining-charge estimate, not full-charge capacity.
 - Android battery health is labelled as framework health, not capacity health.
 - CSV stop/export uses Android's document picker; an internal copy remains if cancelled or failed.
+- v1.8 expands ordinary-app and Shizuku sysfs inventory across power-supply, Type-C, USB-PD, USB-role, thermal and hwmon class trees, and adds thermalservice/power dumpsys output.
 - Adaptive launcher icon is declared in the manifest, including round variant.
 - APK workflow checks application ID and launcher resources, builds the debug APK, inspects package metadata with aapt, computes SHA-256 and uploads APK plus build metadata.
 
@@ -30,8 +31,9 @@ Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 - Source files and documentation were read back from the `batteryscope` branch after updates.
 - The current GitHub branch head is the commit that hardens the APK build workflow; see the branch history for the exact SHA.
 - The GitHub combined-status API returned no status entries at the time of the last check. This is not evidence of a successful build.
-- No APK from this latest 1.7 source has been downloaded, inspected or install-tested in this handoff.
-- No physical RMX2161 runtime test has been performed for the 1.7 changes.
+- No APK from this latest 1.8 source has been downloaded, inspected or install-tested in this handoff.
+- No physical RMX2161 runtime test has been performed for the 1.8 changes.
+- v1.8 remains activity-bound for its CSV sampler and Shizuku live poll. It does not yet provide 24-hour background recording; leaving the app screen can still stop continuous logging/polling.
 - There is no verified full-charge-capacity (FCC) reading yet. BatteryManager CHARGE_COUNTER is not FCC.
 - The diagnostics text report still saves to app-specific storage; only CSV has user-selected document export.
 - The repository does not yet have a dedicated automated Android unit/instrumentation test suite.
