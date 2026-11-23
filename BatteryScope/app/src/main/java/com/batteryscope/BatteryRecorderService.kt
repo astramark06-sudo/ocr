@@ -340,7 +340,7 @@ class BatteryRecorderService : Service() {
             val root = java.io.File(rootPath)
             val prefix = root.name
             if (!root.exists()) {
-                result.put(prefix + "/@root", "NOT_PRESENT")
+                result.put(prefix + "/@root", "ABSENT_OR_HIDDEN_BY_SELINUX")
                 continue
             }
             if (!root.canRead()) {
