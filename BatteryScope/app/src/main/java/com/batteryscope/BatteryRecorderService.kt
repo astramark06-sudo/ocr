@@ -117,7 +117,8 @@ class BatteryRecorderService : Service() {
         if (intent?.action == ACTION_ENABLE_SHIZUKU) {
             try {
                 startAsForeground()
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, true).apply()
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(KEY_ACTIVE, true).putBoolean(KEY_USER_ENABLED, true).apply()
                 acquireSamplingWakeLock()
                 bindPrivilegedTelemetry()
                 handler.removeCallbacks(sampler)
@@ -133,7 +134,8 @@ class BatteryRecorderService : Service() {
         }
         try {
             startAsForeground()
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, true).apply()
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putBoolean(KEY_ACTIVE, true).putBoolean(KEY_USER_ENABLED, true).apply()
             acquireSamplingWakeLock()
             bindPrivilegedTelemetry()
             event(if (intent == null) "RECORDER_RESTARTED" else "RECORDER_STARTED",
@@ -142,7 +144,8 @@ class BatteryRecorderService : Service() {
             handler.post(sampler)
         } catch (t: Throwable) {
             event("RECORDER_START_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putBoolean(KEY_ACTIVE, false).putBoolean(KEY_USER_ENABLED, false).apply()
             stopSelf()
         }
         return START_STICKY
@@ -471,7 +474,8 @@ class BatteryRecorderService : Service() {
         privilegedService = null
         privilegedBinding = false
         event("RECORDER_STOPPED", "Stopped by user")
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            .putBoolean(KEY_ACTIVE, false).putBoolean(KEY_USER_ENABLED, false).apply()
         if (receiverRegistered) {
             try { unregisterReceiver(receiver) } catch (_: Throwable) { }
             receiverRegistered = false
@@ -508,6 +512,7 @@ class BatteryRecorderService : Service() {
         const val ACTION_ENABLE_SHIZUKU = "com.batteryscope.action.ENABLE_SHIZUKU"
         const val PREFS = "batteryscope_recorder"
         const val KEY_ACTIVE = "recorder_active"
+        const val KEY_USER_ENABLED = "recorder_user_enabled"
         const val SAMPLE_INTERVAL_MS = 30_000L
         private const val SYSFS_INTERVAL_MS = 120_000L
         private const val MAX_SYSFS_FIELDS = 180
