@@ -46,6 +46,7 @@ class BatteryRecorderService : Service() {
     private var foregroundPackage: String? = null
     private var lastSampleState: String? = null
     private var lastSamplePlug: String? = null
+    private val lastBatteryPropertyStatus = mutableMapOf<Int, String>()
     private var lastSysfsReadMs = 0L
     private var lastSysfsJson = JSONObject()
     private var receiverRegistered = false
@@ -281,10 +282,32 @@ class BatteryRecorderService : Service() {
         insertSample(row)
     }
 
-    private fun longProperty(id: Int): Long? = try {
-        val value = batteryManager.getLongProperty(id)
-        if (value == Long.MIN_VALUE || value == Long.MAX_VALUE) null else value
-    } catch (_: Throwable) { null }
+    private fun longProperty(id: Int): Long? {
+        val result = try {
+            val value = batteryManager.getLongProperty(id)
+            if (value == Long.MIN_VALUE || value == Long.MAX_VALUE) {
+                null to "ANDROID_UNAVAILABLE_SENTINEL"
+            } else {
+                value to "AVAILABLE"
+            }
+        } catch (t: SecurityException) {
+            null to "SECURITY_EXCEPTION"
+        } catch (t: Throwable) {
+            null to "ERROR:" + t.javaClass.simpleName
+        }
+        val propertyName = when (id) {
+            BatteryManager.BATTERY_PROPERTY_CURRENT_NOW -> "CURRENT_NOW"
+            BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE -> "CURRENT_AVERAGE"
+            BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER -> "CHARGE_COUNTER"
+            BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER -> "ENERGY_COUNTER"
+            else -> "PROPERTY_$id"
+        }
+        val previous = lastBatteryPropertyStatus.put(id, result.second)
+        if (previous != result.second) {
+            event("BATTERY_PROPERTY_ACCESS", propertyName + "=" + result.second)
+        }
+        return result.first
+    }
 
     private fun hasUsageAccess(): Boolean = try {
         val ops = getSystemService(APP_OPS_SERVICE) as AppOpsManager
