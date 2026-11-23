@@ -5,6 +5,8 @@
 - Added a persisted continuous/low-impact recorder mode: continuous holds a partial CPU wake lock for screen-off continuity; low-impact releases it and exposes resulting sample gaps.
 - Added best-effort charger-advertised maximum charging current/voltage, battery-present state and optional cycle-count metadata to live telemetry and SQLite schema v3, with non-destructive v2 migration.
 - Added explicit diagnostics for unavailable BatteryManager properties, Usage Access, per-kernel-root visibility and read/list failures; root paths hidden by SELinux are not falsely reported as definitely absent.
+- Added a separate kernel fuel-gauge report in Battery Health for readable charge_full, charge_full_design and cycle_count values, with a reason when the driver does not export or the app cannot read them.
+- Kept empirical capacity and kernel-reported capacity-health estimates separate.
 - Expanded history with charge-counter-derived mA charge/discharge rates, screen-on/off rate comparisons and historical time-to-full/time-to-empty projections.
 - Extended CSV export with the additional battery/charger fields.
 - Preserved the 30-second recorder cadence and 120-second hardware-tree inventory cadence.
