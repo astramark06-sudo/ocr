@@ -611,7 +611,7 @@ class RecorderDatabase(context: Context) :
             }
             append("Kernel gauge values are vendor/driver exports; verify units and meaning on the RMX2161 before treating them as calibrated capacity.")
         }
-        return empiricalReport + "\\n\\n" + kernelReport
+        return empiricalReport + "\n\n" + kernelReport
     }
 
     private fun kernelFieldReason(
@@ -628,7 +628,7 @@ class RecorderDatabase(context: Context) :
         return when (root) {
             "READ_DENIED" -> "power_supply root is present but access was denied"
             "ABSENT_OR_HIDDEN_BY_SELINUX" -> "power_supply root is absent or hidden by SELinux"
-            else -> "driver does not export the attribute, or the bounded inventory did not reach it"
+            else -> "driver does not export " + name + ", or the bounded inventory did not reach it"
         }
     }
 
