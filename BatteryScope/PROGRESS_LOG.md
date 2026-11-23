@@ -71,3 +71,9 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Local isolated Kotlin checks passed for capacity estimation (3 scenarios) and rate/forecast arithmetic (4 checks). These are not a substitute for the full Android Gradle build.
 - Android Gradle build, repository JVM suite, APK artifact/signature and RMX2161 runtime validation remain unverified. Do not install over an existing signed build or uninstall an older app without protecting its local database.
 - Latest inspected source milestone before this checkpoint: `344c04242220d17dd2bb6be5c9fbeae5bbd97d12`.
+
+## Capacity panel follow-up
+
+- Extended the Battery Health panel to show both the empirical charge-counter/SOC capacity estimate and the latest kernel fuel-gauge `charge_full`, `charge_full_design` and `cycle_count` report.
+- The kernel report identifies a denied attribute, a denied/hidden power_supply root, a non-numeric value, or an attribute not exported/reached by the bounded scan. It does not conflate this with the empirical estimate.
+- Corrected history rate analytics so missing or sign-inconsistent charge-counter data is shown as unavailable, not a fabricated zero.
