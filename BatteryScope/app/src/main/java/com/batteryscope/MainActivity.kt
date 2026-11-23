@@ -594,7 +594,8 @@ class MainActivity : Activity() {
         if (!::capacityText.isInitialized) return
         Thread {
             val report = try {
-                RecorderDatabase(applicationContext).use { it.capacityEstimateReport() }
+                val database = RecorderDatabase(applicationContext)
+                try { database.capacityEstimateReport() } finally { database.close() }
             } catch (t: Throwable) {
                 "Capacity estimate failed: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
             }
