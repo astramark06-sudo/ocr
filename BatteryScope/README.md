@@ -9,7 +9,7 @@ Build toolchain: Java 17, Gradle 8.9, Android SDK 35
 
 ## Battery telemetry
 
-Where the phone's fuel gauge and ROM expose them, Android BatteryManager provides state of charge, battery voltage, temperature, health state, plug type, technology, instantaneous and average battery-side current, charge counter, energy counter, battery-present state, charger-advertised maximum charging current/voltage and (on newer Android/OEM builds) cycle-count metadata.
+Where the phone's fuel gauge and ROM expose them, Android BatteryManager provides state of charge, battery voltage, temperature, health state, plug type, technology, instantaneous and average battery-side current, charge counter, energy counter, battery-present state, invalid-charger flag, charger-advertised maximum charging current/voltage and (on newer Android/OEM builds) cycle-count metadata.
 
 Important distinctions:
 - BatteryManager current and voltage are battery-side measurements, not USB adapter output.
