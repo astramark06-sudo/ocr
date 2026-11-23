@@ -808,6 +808,7 @@ class RecorderDatabase(context: Context) :
         val sessions = mutableListOf<List<Row>>()
         var current = mutableListOf<Row>()
         for (row in rows) {
+            val firstFull = wantCharge && row.state == "FULL" && row.plug != "NONE"
             if (matches(row)) {
                 if (current.isNotEmpty()) {
                     val gap = row.time - current.last().time
@@ -817,6 +818,13 @@ class RecorderDatabase(context: Context) :
                     }
                 }
                 current += row
+            } else if (firstFull) {
+                if (current.isNotEmpty()) {
+                    val gap = row.time - current.last().time
+                    if (gap in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) current += row
+                    sessions += current
+                    current = mutableListOf()
+                }
             } else if (current.isNotEmpty()) {
                 sessions += current
                 current = mutableListOf()
@@ -859,10 +867,19 @@ class RecorderDatabase(context: Context) :
         var end = rows.lastIndex
         while (end >= 0 && !matches(rows[end])) end--
         if (end < 0) return "No recorded session."
+        // Include the first FULL sample after a charging run, but not later full/plugged idle time.
+        if (wantCharge && end < rows.lastIndex) {
+            val next = rows[end + 1]
+            val gap = next.time - rows[end].time
+            if (next.state == "FULL" && next.plug != "NONE" &&
+                gap in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) end++
+        }
         var start = end
         while (start > 0) {
             val gap = rows[start].time - rows[start - 1].time
-            if (!matches(rows[start - 1]) || gap !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) break
+            val prev = rows[start - 1]
+            val prevMatches = matches(prev) || (wantCharge && prev.state == "FULL" && prev.plug != "NONE")
+            if (!prevMatches || gap !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) break
             start--
         }
         val run = rows.subList(start, end + 1)
