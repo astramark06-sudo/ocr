@@ -91,3 +91,14 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - CSV header, sample row and event row widths align at 28 fields after adding `invalid_charger_state`.
 - Android invalid-charger flag is now included in the live panel, diagnostics, SQLite and CSV.
 - Pure Kotlin rate/capacity arithmetic checks passed earlier; full Android build, GitHub Actions result and physical handset validation remain pending.
+
+
+## 2026-11-23 — Responsiveness, boot-resume and Android CI hardening
+
+- Removed a duplicate `MainActivity.onDestroy()` override found during source review; this was a Kotlin compile blocker.
+- Added `.github/workflows/batteryscope-android.yml`: Java 17, Android SDK 35, Gradle 8.9, JVM unit tests, debug APK assembly, package/version metadata check, SHA-256 report and a retained GitHub Actions artifact.
+- Moved recorder event SQLite writes from Android service/broadcast main-thread callbacks onto the recorder HandlerThread. Service shutdown now queues database closure after pending worker tasks so queued events are not discarded.
+- Removed synchronous SQLite opening/writes from the BOOT_COMPLETED receiver. A boot-resume startup exception is retained in preferences and shown in the app's automatic diagnostics; successful recorder startup clears the stale failure.
+- Existing focused JVM tests include battery rate/forecast math, capacity estimation, reboot-aware time intervals and CSV row escaping.
+- Source version remains 1.14 / versionCode 15. No application ID or database schema change was made in this hardening pass.
+- Verification still required: inspect the Android Actions run for the exact branch head, repair any compiler/test failures, inspect the produced artifact and signature, and test on the physical RMX2161. No APK is declared verified by these source commits.
