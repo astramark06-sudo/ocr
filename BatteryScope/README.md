@@ -1,15 +1,15 @@
-# BatteryScope 1.13 — Realme Narzo 20 Pro (RMX2161)
+# BatteryScope 1.14 — Realme Narzo 20 Pro (RMX2161)
 
 BatteryScope is a standalone Android battery and charging telemetry app. It uses standard Android framework APIs and best-effort read-only access from its ordinary app process. It does not require Shizuku, root, ADB setup or a companion app.
 
 Application ID: `com.batteryscope`  
-Version: 1.13 (versionCode 14)  
+Version: 1.14 (versionCode 15)  
 Target handset: Realme Narzo 20 Pro RMX2161, Android 12, non-rooted  
 Build toolchain: Java 17, Gradle 8.9, Android SDK 35
 
 ## Battery telemetry
 
-Where the phone's fuel gauge exposes them, Android BatteryManager provides state of charge, battery voltage, temperature, health state, plug type, technology, instantaneous and average battery-side current, charge counter and energy counter.
+Where the phone's fuel gauge and ROM expose them, Android BatteryManager provides state of charge, battery voltage, temperature, health state, plug type, technology, instantaneous and average battery-side current, charge counter, energy counter, battery-present state, charger-advertised maximum charging current/voltage and (on newer Android/OEM builds) cycle-count metadata.
 
 Important distinctions:
 - BatteryManager current and voltage are battery-side measurements, not USB adapter output.
@@ -40,9 +40,9 @@ Start **Start all-day recorder** in the app. A foreground service samples:
 - Power connection, battery state, screen on/off and battery-low transitions.
 - Optional foreground-app tracking after the user grants Android Usage Access.
 
-The recorder stores raw samples and events in a local SQLite database. History views include 24-hour, 7-day, 30-day, 90-day, 365-day and all-time summaries, charging/discharging trends, screen-on/off comparisons, plugged-in battery decline, session timing and sampling-gap diagnostics. Foreground-app battery decline is correlation, not direct per-app current or energy measurement.
+The recorder stores raw samples and events in a local SQLite database. History views include 24-hour, 7-day, 30-day, 90-day, 365-day and all-time summaries; charging/discharging percentage rates and charge-counter-derived mA rates; screen-on/off comparisons; plugged-in battery decline; app foreground-time correlation; session start/end and threshold times; recent session history; and sampling-gap diagnostics. The app also estimates time to 100% and 0% using historical screen-on and screen-off rates. These forecasts are approximate and are labelled as historical estimates. Foreground-app battery decline is correlation, not direct per-app current or energy measurement.
 
-The service uses a partial CPU wake lock while recording to reduce deep-suspend sampling gaps. This increases BatteryScope's own power consumption and can affect the battery-drain experiment being measured. The ongoing notification discloses this; stop recording to release the wake lock. Recording is best-effort and can be interrupted by force-stop, powered-off time, Android/Realme restrictions or service failure. Boot resume is attempted only when the user previously left recording enabled.
+The service uses a partial CPU wake lock while recording to reduce deep-suspend sampling gaps. This increases BatteryScope's own power consumption and can affect the battery-drain experiment being measured. BatteryScope reports this in its ongoing notification; comparisons should use consistent recorder settings. The ongoing notification discloses this; stop recording to release the wake lock. Recording is best-effort and can be interrupted by force-stop, powered-off time, Android/Realme restrictions or service failure. Boot resume is attempted only when the user previously left recording enabled.
 
 ## Export and storage
 
