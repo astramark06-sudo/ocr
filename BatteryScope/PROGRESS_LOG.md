@@ -149,3 +149,12 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - The dashboard now identifies the exact percentage-input failure: ACTION_BATTERY_CHANGED unavailable, EXTRA_LEVEL missing, EXTRA_SCALE missing, invalid level, non-positive scale or level greater than scale.
 - The recorder writes an event only when this metadata status changes, preserving the reason in exported event history without producing a row every sample.
 - A null/invalid level-scale pair remains null; no assumed 100-point scale is used.
+
+
+## 2026-11-23 — Source-level verification checkpoint
+
+- Compiled the new pure `BatteryPercentMath` helper with the local Kotlin compiler and ran eight isolated checks; all eight passed. This does not compile Android-dependent application sources.
+- Re-ran source checks on the batteryscope branch: one MainActivity onDestroy override; no Shizuku dependency/provider, root invocation or sysfs write path; schema v4; CSV header 28 columns and sample field list 23 columns; recorder event writes and database close queued on its worker; boot receiver contains no SQLite access.
+- Verified the Android workflow includes JVM tests, APK assembly, package/version checks, APK signature/certificate reporting, checksum and artifact upload even when the build/test step fails.
+- The GitHub combined-status response for the latest inspected source commit contains no status entries; the available workflow-run lookup is limited to pull-request-triggered runs. Therefore the push-triggered Android workflow result is not confirmed here.
+- Local environment has Kotlin/JDK but no Gradle installation or Android SDK. Full Android build, artifact inspection and RMX2161 hardware validation remain outstanding.
