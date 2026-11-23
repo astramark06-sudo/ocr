@@ -101,6 +101,8 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendLine("A missing node means not exposed at this path; it does not prove the hardware lacks that capability.")
     }
 
+    override fun snapshotBatteryStats(): String = runCommand(listOf("dumpsys", "batterystats", "--charged"), 10_000, 20_000)
+
     override fun snapshotLink(): String = buildString {
         appendLine("BATTERYSCOPE LIVE POWER-PATH SAMPLE")
         appendLine("Timestamp: ${System.currentTimeMillis()}")
@@ -278,7 +280,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         }
     }
 
-    private fun runCommand(command: List<String>, timeoutMs: Long): String = try {
+    private fun runCommand(command: List<String>, timeoutMs: Long, maxChars: Int = 6000): String = try {
         val process = ProcessBuilder(command).redirectErrorStream(true).start()
         val output = StringBuilder()
         val reader = Thread {
@@ -286,7 +288,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 process.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         synchronized(output) {
-                            if (output.length < 6000) output.append(line).append('\n')
+                            if (output.length < maxChars) output.append(line).append('\n')
                         }
                     }
                 }
@@ -301,7 +303,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
             "TIMEOUT after ${timeoutMs} ms"
         } else {
             reader.join(1000)
-            synchronized(output) { output.toString().take(6000) }
+            synchronized(output) { output.toString().take(maxChars) }
         }
     } catch (t: Throwable) {
         "COMMAND FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
