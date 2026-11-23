@@ -43,6 +43,8 @@ class BatteryRecorderService : Service() {
     private var batteryIntent: Intent? = null
     private var lastUsageQueryMs = 0L
     private var foregroundPackage: String? = null
+    private var lastSampleState: String? = null
+    private var lastSamplePlug: String? = null
     private var lastSysfsReadMs = 0L
     private var lastSysfsJson = JSONObject()
     private var receiverRegistered = false
@@ -254,6 +256,14 @@ class BatteryRecorderService : Service() {
             else -> if (plugCode == 0) "NONE" else "OTHER_" + plugCode
         }
         val healthCode = intent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1
+        if (status != lastSampleState) {
+            event("BATTERY_STATE_CHANGED", "from=" + (lastSampleState ?: "UNKNOWN") + " to=" + status)
+            lastSampleState = status
+        }
+        if (plug != lastSamplePlug) {
+            event("POWER_SOURCE_CHANGED", "from=" + (lastSamplePlug ?: "UNKNOWN") + " to=" + plug)
+            lastSamplePlug = plug
+        }
         val health = when (healthCode) {
             BatteryManager.BATTERY_HEALTH_GOOD -> "GOOD"
             BatteryManager.BATTERY_HEALTH_OVERHEAT -> "OVERHEAT"
@@ -305,7 +315,7 @@ class BatteryRecorderService : Service() {
             put("foreground_package", activeApp ?: "")
             put("usage_access", if (hasUsageAccess()) 1 else 0)
             if (refreshSysfs) put("power_supply_json", lastSysfsJson.toString())
-            if (usb != null) {
+            if (refreshSysfs && usb != null) {
                 put("usb_voltage_candidate_uv", usb.first)
                 put("usb_current_candidate_ua", usb.second)
             }
@@ -417,6 +427,14 @@ class BatteryRecorderService : Service() {
             if (count >= maxFields) break
         }
         result.put("@field_count", count)
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                val power = getSystemService(POWER_SERVICE) as PowerManager
+                result.put("@android_thermal_status", power.currentThermalStatus)
+            } catch (t: Throwable) {
+                result.put("@android_thermal_status", "UNAVAILABLE:" + t.javaClass.simpleName)
+            }
+        }
         return result
     }
 
