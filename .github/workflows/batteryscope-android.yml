@@ -39,7 +39,10 @@ jobs:
 
       - name: Install Android 35 SDK packages
         run: |
+          # Keep the SDK manager's exit code while avoiding SIGPIPE from yes.
+          set +o pipefail
           yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle 8.9
