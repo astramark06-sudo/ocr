@@ -80,3 +80,10 @@ Version 1.10 adds an optional user-started recorder independent of the app scree
 For foreground app tracking, grant BatteryScope **Usage Access** from the app's button. This records which app was in the foreground during sampled intervals; it does not provide a direct electrical measurement of that app's battery current. The recorder shows an ongoing foreground-service notification. It can be interrupted by force-stop, device power-off, OEM process management, permission changes or unavailable hardware interfaces.
 
 For charger input readings, check the separate Shizuku audit and measurement diagnosis. USB-side voltage/current candidates are retained with their sysfs source data but must not be treated as confirmed VBUS/IBUS until the RMX2161 driver semantics are validated.
+
+
+The recorder samples the Android battery APIs every 30 seconds and refreshes bounded power-supply, Type-C, USB-PD, USB-role, thermal and hwmon sysfs trees every 120 seconds. If Shizuku is running and BatteryScope has been authorized, the recorder binds its own read-only Shizuku UserService and stores periodic privileged power-path snapshots. This binding remains tied to the recorder service rather than the Activity.
+
+For best-effort screen-off sampling, the recorder holds a partial CPU wake lock while active. This prevents normal CPU suspend from deferring the sampling handler, but it increases BatteryScope's own battery consumption. The ongoing notification discloses this. Stop the recorder to release the wake lock.
+
+The history view includes 24-hour, 7-day, 30-day and 90-day summaries; charge/discharge session rates; screen-on/off rates; charge-counter deltas where supported; most recent session time to 50/80/90/100% or 80/50/20/10/0%; and per-app foreground-time correlation with coincident battery-level loss. Threshold times are sample-resolution observations or estimates, not exact hardware event times. App drain remains correlation, not direct per-app current measurement.
