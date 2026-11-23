@@ -45,6 +45,8 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 - Foreground-app battery decline is correlation, not direct per-app electrical measurement.
 - Missing or denied values remain unavailable, not zero.
 
+Final repository head: `f78c9e63c63652b6dc8d600623482d9a18dee043`. The verified APK was built from app-source commit `480a567cd7c90f552976dc60472fa6ef11a5e126`; comparison to the final branch head shows only docs/workflow changes after that commit, with no Android app source/build changes.
+
 ## Verification state
 
 - Source version 1.15 / versionCode 16 is committed to branch `batteryscope`; app source commit used for the verified build is `480a567cd7c90f552976dc60472fa6ef11a5e126`.
