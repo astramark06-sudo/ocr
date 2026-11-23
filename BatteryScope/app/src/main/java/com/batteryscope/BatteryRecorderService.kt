@@ -720,7 +720,7 @@ class RecorderDatabase(context: Context) :
                 appendLine("Foreground app time + coincident battery change (approx.):")
                 if (stats.apps.isEmpty()) appendLine("  unavailable / Usage Access not granted / not yet recorded")
                 else stats.apps.take(8).forEach { app ->
-                    appendLine("  " + app.name + ": " + app.minutes + " min foreground • +" + app.chargePct + "% while charging • -" + app.drainPct + "% unplugged • -" + app.pluggedDrainPct + "% while connected")
+                    appendLine("  " + app.name + ": " + app.minutes + " min foreground • +" + app.chargePct + "% charging (counter " + app.counter(app.chargeCounterMah) + ") • -" + app.drainPct + "% unplugged (counter " + app.counter(app.drainCounterMah) + ") • -" + app.pluggedDrainPct + "% connected (counter " + app.counter(app.pluggedDrainCounterMah) + ")")
                 }
             }
             appendLine()
@@ -753,11 +753,21 @@ class RecorderDatabase(context: Context) :
         val time: Long, val elapsed: Long, val pct: Int?, val state: String, val plug: String,
         val chargeCounter: Long?, val screen: Boolean, val app: String, val bootCount: Int?
     )
-    private data class AppMetric(val name: String, val ms: Long, val charge: Double, val drain: Double, val pluggedDrain: Double) {
+    private data class AppMetric(
+        val name: String,
+        val ms: Long,
+        val charge: Double,
+        val drain: Double,
+        val pluggedDrain: Double,
+        val chargeCounterMah: Double?,
+        val drainCounterMah: Double?,
+        val pluggedDrainCounterMah: Double?
+    ) {
         val minutes: Long get() = ms / 60_000L
         val chargePct: String get() = String.format(Locale.US, "%.1f", charge)
         val drainPct: String get() = String.format(Locale.US, "%.1f", drain)
         val pluggedDrainPct: String get() = String.format(Locale.US, "%.1f", pluggedDrain)
+        fun counter(value: Double?): String = value?.let { String.format(Locale.US, "%.1f mAh", it) } ?: "n/a"
     }
     private data class Bucket(var ms: Long = 0L, var pct: Double = 0.0, var chargeCounterUah: Long = 0L, var counterIntervals: Int = 0)
     private data class Stats(
@@ -870,6 +880,9 @@ class RecorderDatabase(context: Context) :
         val appCharge = linkedMapOf<String, Double>()
         val appDrain = linkedMapOf<String, Double>()
         val appPluggedDrain = linkedMapOf<String, Double>()
+        val appChargeCounterMah = linkedMapOf<String, Double>()
+        val appDrainCounterMah = linkedMapOf<String, Double>()
+        val appPluggedDrainCounterMah = linkedMapOf<String, Double>()
         var count = 0
         var screenOn = 0
         var screenOff = 0
@@ -920,15 +933,27 @@ class RecorderDatabase(context: Context) :
                                 // Some ROMs report EXTRA_PLUGGED=NONE while BATTERY_STATUS remains CHARGING.
                                 add(pluggedDrain, dt, -delta, counterLoss)
                                 add(if (after.screen) pluggedDrainOn else pluggedDrainOff, dt, -delta, counterLoss)
-                                if (sameApp) appPluggedDrain[after.app] = (appPluggedDrain[after.app] ?: 0.0) - delta
+                                if (sameApp) {
+                                    appPluggedDrain[after.app] = (appPluggedDrain[after.app] ?: 0.0) - delta
+                                    if (counterLoss != null) appPluggedDrainCounterMah[after.app] =
+                                        (appPluggedDrainCounterMah[after.app] ?: 0.0) + counterLoss / 1000.0
+                                }
                             } else if (charging(before) && charging(after) && delta >= 0.0) {
                                 add(charge, dt, delta, counterGain)
                                 add(if (after.screen) chargeOn else chargeOff, dt, delta, counterGain)
-                                if (sameApp) appCharge[after.app] = (appCharge[after.app] ?: 0.0) + delta
+                                if (sameApp) {
+                                    appCharge[after.app] = (appCharge[after.app] ?: 0.0) + delta
+                                    if (counterGain != null) appChargeCounterMah[after.app] =
+                                        (appChargeCounterMah[after.app] ?: 0.0) + counterGain / 1000.0
+                                }
                             } else if (discharging(before) && discharging(after) && !bothPlugged && delta <= 0.0) {
                                 add(drain, dt, -delta, counterLoss)
                                 add(if (after.screen) drainOn else drainOff, dt, -delta, counterLoss)
-                                if (sameApp) appDrain[after.app] = (appDrain[after.app] ?: 0.0) - delta
+                                if (sameApp) {
+                                    appDrain[after.app] = (appDrain[after.app] ?: 0.0) - delta
+                                    if (counterLoss != null) appDrainCounterMah[after.app] =
+                                        (appDrainCounterMah[after.app] ?: 0.0) + counterLoss / 1000.0
+                                }
                             }
                         }
                     }
@@ -950,7 +975,15 @@ class RecorderDatabase(context: Context) :
             duration(pluggedDrainOff), fmt(pluggedDrainOff.pct), rate(pluggedDrainOff),
             screenOn, screenOff,
             appTime.entries.sortedByDescending { it.value }.map {
-                AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0, appPluggedDrain[it.key] ?: 0.0)
+                AppMetric(
+                    it.key, it.value,
+                    appCharge[it.key] ?: 0.0,
+                    appDrain[it.key] ?: 0.0,
+                    appPluggedDrain[it.key] ?: 0.0,
+                    appChargeCounterMah[it.key],
+                    appDrainCounterMah[it.key],
+                    appPluggedDrainCounterMah[it.key]
+                )
             },
             if (charge.counterIntervals > 0) BatteryRateMath.counterRateMa(charge.chargeCounterUah, charge.ms)?.let { fmt(it) } ?: "n/a" else "n/a",
             if (drain.counterIntervals > 0) BatteryRateMath.counterRateMa(drain.chargeCounterUah, drain.ms)?.let { fmt(it) } ?: "n/a" else "n/a"
