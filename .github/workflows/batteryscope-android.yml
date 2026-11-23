@@ -65,7 +65,7 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee apk-badging.txt
           grep -q "package: name='com.batteryscope'" apk-badging.txt
-          grep -q "versionCode='15'" apk-badging.txt
+          grep -q "versionCode='16'" apk-badging.txt
           sha256sum "$APK" | tee apk-sha256.txt
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee apk-signing.txt
           stat -c 'APK size: %s bytes' "$APK"
