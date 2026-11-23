@@ -49,12 +49,7 @@ class MainActivity : Activity() {
     private var latestLinkSnapshot = ""
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    private var logging = false
-    private var csvWriter: java.io.BufferedWriter? = null
-    private var csvFile: File? = null
     private var pendingExportFile: File? = null
-    private var sessionTimestamp: String? = null
-    private var csvSampleCount = 0L
     private var controlHistory = StringBuilder()
     private var latestDiagnosticReport = ""
     private var latestDiagnosticTimeMs = 0L
@@ -905,37 +900,7 @@ class MainActivity : Activity() {
             append("Refresh: ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())} • 1 second")
         }
 
-        if (logging) {
-            val row = listOf(
-                System.currentTimeMillis().toString(),
-                reading.percent?.toString() ?: "",
-                reading.status,
-                reading.plugged,
-                reading.rawVoltageMv?.toString() ?: "",
-                reading.currentUa?.toString() ?: "",
-                reading.averageCurrentUa?.toString() ?: "",
-                reading.chargeCounterUah?.toString() ?: "",
-                reading.energyNwh?.toString() ?: "",
-                reading.temperatureC?.toString() ?: "",
-                reading.health,
-                reading.technology,
-                csvEscape(JSONObject(reading.supplies).toString())
-            ).joinToString(",")
-            try {
-                val writer = csvWriter ?: throw IllegalStateException("CSV writer is not open")
-                writer.write(row)
-                writer.newLine()
-                csvSampleCount++
-                if (csvSampleCount % 10L == 0L) writer.flush()
-            } catch (t: Throwable) {
-                logging = false
-                try { csvWriter?.close() } catch (_: Throwable) { }
-                csvWriter = null
-                startButton.isEnabled = true
-                stopButton.isEnabled = false
-                statusText.text = "CSV logging stopped: ${t.javaClass.simpleName}: ${t.message ?: "write error"}"
-            }
-        }
+        refreshHistoryDisplay(false)
     }
 
     private fun formatSupplyValue(key: String, raw: String): String {
@@ -1095,12 +1060,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        logging = false
-        try {
-            csvWriter?.flush()
-            csvWriter?.close()
-        } catch (_: Throwable) { }
-        csvWriter = null
         handler.removeCallbacks(sampler)
         handler.removeCallbacks(linkSampler)
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
