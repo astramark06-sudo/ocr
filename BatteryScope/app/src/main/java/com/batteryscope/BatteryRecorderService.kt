@@ -1048,11 +1048,42 @@ class RecorderDatabase(context: Context) :
         val directionMatches = if (wantCharge) change > 0 else change < 0
         val rate = if (directionMatches) kotlin.math.abs(change.toDouble()) / (elapsed / 3_600_000.0) else 0.0
         val counterDelta = if (first.chargeCounter != null && last.chargeCounter != null) last.chargeCounter - first.chargeCounter else null
-        val onMs = run.zipWithNext().sumOf { (a, b) ->
-            val dt = sampleIntervalMs(a, b)
-            if (dt in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3) && b.screen) dt else 0L
+        var onMs = 0L
+        var offMs = 0L
+        var onSocChange = 0.0
+        var offSocChange = 0.0
+        var onCounterUah = 0L
+        var offCounterUah = 0L
+        var onCounterIntervals = 0
+        var offCounterIntervals = 0
+        for ((before, after) in run.zipWithNext()) {
+            val dt = sampleIntervalMs(before, after)
+            if (dt !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) continue
+            val screenBucketOn = after.screen
+            if (screenBucketOn) onMs += dt else offMs += dt
+            val deltaSoc = if (before.pct != null && after.pct != null) after.pct - before.pct else null
+            val socDirectionValid = deltaSoc != null && if (wantCharge) deltaSoc >= 0 else deltaSoc <= 0
+            if (socDirectionValid) {
+                if (screenBucketOn) onSocChange += kotlin.math.abs(deltaSoc!!.toDouble())
+                else offSocChange += kotlin.math.abs(deltaSoc!!.toDouble())
+            }
+            val deltaCounter = if (before.chargeCounter != null && after.chargeCounter != null)
+                after.chargeCounter - before.chargeCounter else null
+            val counterDirectionValid = deltaCounter != null && if (wantCharge) deltaCounter > 0L else deltaCounter < 0L
+            if (counterDirectionValid) {
+                if (screenBucketOn) {
+                    onCounterUah += kotlin.math.abs(deltaCounter!!)
+                    onCounterIntervals++
+                } else {
+                    offCounterUah += kotlin.math.abs(deltaCounter!!)
+                    offCounterIntervals++
+                }
+            }
         }
-        val offMs = elapsed - onMs
+        val onRate = if (onMs > 0L) onSocChange / (onMs / 3_600_000.0) else null
+        val offRate = if (offMs > 0L) offSocChange / (offMs / 3_600_000.0) else null
+        val onCounterRate = if (onCounterIntervals > 0) BatteryRateMath.counterRateMa(onCounterUah, onMs) else null
+        val offCounterRate = if (offCounterIntervals > 0) BatteryRateMath.counterRateMa(offCounterUah, offMs) else null
         val out = StringBuilder()
         out.appendLine("Observed window: " + first.time + " → " + last.time)
         out.appendLine("Level: " + initial + "% → " + current + "% • elapsed: " + durationText(elapsed))
@@ -1062,6 +1093,16 @@ class RecorderDatabase(context: Context) :
             " • " + String.format(Locale.US, "%.1f mAh/hour", kotlin.math.abs(counterDelta) / 1000.0 / (elapsed / 3_600_000.0)) + " (Android estimate)")
         else out.appendLine("Charge-counter rate: unavailable")
         out.appendLine("Screen ON: " + durationText(onMs) + " • screen OFF: " + durationText(offMs))
+        val onRateText = onRate?.let { String.format(Locale.US, "%.2f pp/h", it) } ?: "n/a"
+        val offRateText = offRate?.let { String.format(Locale.US, "%.2f pp/h", it) } ?: "n/a"
+        val onCounterText = onCounterRate?.let { String.format(Locale.US, "%.0f mA battery-side", it) } ?: "n/a"
+        val offCounterText = offCounterRate?.let { String.format(Locale.US, "%.0f mA battery-side", it) } ?: "n/a"
+        val remaining = if (wantCharge) (100 - current).coerceAtLeast(0).toDouble() else current.coerceAtLeast(0).toDouble()
+        val thresholdName = if (wantCharge) "100%" else "0%"
+        out.appendLine("Screen ON (active-use proxy): " + onRateText + " • " + onCounterText +
+            " • time to " + thresholdName + ": " + (onRate?.let { forecastDuration(remaining, String.format(Locale.US, "%.6f", it)) } ?: "not enough screen-ON data"))
+        out.appendLine("Screen OFF (idle-use proxy): " + offRateText + " • " + offCounterText +
+            " • time to " + thresholdName + ": " + (offRate?.let { forecastDuration(remaining, String.format(Locale.US, "%.6f", it)) } ?: "not enough screen-OFF data"))
         val thresholds = if (wantCharge) listOf(50, 80, 90, 100) else listOf(80, 50, 20, 10, 0)
         out.appendLine(if (wantCharge) "Time from first recorded sample in this session to charge thresholds:" else "Time from first recorded sample in this session to discharge thresholds:")
         for (threshold in thresholds) {
