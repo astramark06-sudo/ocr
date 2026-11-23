@@ -1,4 +1,10 @@
-# BatteryScope 1.7 — Engineering Audit
+# BatteryScope 1.9 — Engineering Audit
+
+## 1.9 ordinary-app access diagnosis
+
+The ordinary app process now attempts bounded, read-only enumeration of power_supply, Type-C, USB-PD, dual-role USB, USB-role, thermal and hwmon class attributes. Individual permission/read errors are retained as `READ_DENIED`, `LIST_DENIED` or an error string rather than silently dropped. The UI's automatic diagnosis separates external power-supply nodes from battery/BMS nodes, checks whether a plausible `voltage_now` and `current_now` pair is exported by the same external supply, and reports configured input limits separately from live draw. Type-C/PD/role and thermal/hwmon discovery counts are reported independently.
+
+A same-node pair is only a candidate until the installed driver's exact semantics are confirmed. The app does not infer USB input power from battery current, does not treat PDO capabilities or limits as live measurements, does not invoke `su` or trigger a root prompt, and does not write sysfs. Shizuku remains the optional ADB-shell-UID path for a more privileged read-only audit. The actual availability of charger-side measurements still requires a runtime audit on the handset.
 
 Audit date: 2026-11-21
 Source revision: telemetry and export correction
