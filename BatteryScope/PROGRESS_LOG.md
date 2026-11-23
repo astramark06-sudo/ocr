@@ -77,3 +77,10 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Extended the Battery Health panel to show both the empirical charge-counter/SOC capacity estimate and the latest kernel fuel-gauge `charge_full`, `charge_full_design` and `cycle_count` report.
 - The kernel report identifies a denied attribute, a denied/hidden power_supply root, a non-numeric value, or an attribute not exported/reached by the bounded scan. It does not conflate this with the empirical estimate.
 - Corrected history rate analytics so missing or sign-inconsistent charge-counter data is shown as unavailable, not a fabricated zero.
+
+## Schema v4 charger-diagnostic checkpoint
+
+- Added the Android `invalid_charger` battery-broadcast extra to live telemetry, diagnosis and recorder samples.
+- SQLite schema is now v4; v3-to-v4 migration adds `invalid_charger_state` without deleting existing history. v1/v2 migrations remain sequential.
+- CSV includes invalid-charger status. Header, sample row and event row widths were rechecked: 28 columns each (23 sample-specific columns plus the 3 leading and 2 trailing record/event fields).
+- Full Android Gradle build and physical RMX2161 validation remain pending; no APK is claimed as verified.
