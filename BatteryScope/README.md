@@ -91,7 +91,7 @@ The history view includes 24-hour, 7-day, 30-day and 90-day summaries; charge/di
 
 ## 1.11 continuous telemetry recorder
 
-The recorder is user-started and foreground-notification-backed. It samples core BatteryManager telemetry every 30 seconds on a dedicated worker thread, independent of the Activity, and stores raw samples/events in local SQLite. It refreshes class-tree telemetry every 120 seconds and, when Shizuku is running and authorized, stores privileged snapshots every 120 seconds plus a full read-only Android framework/BatteryStats audit every 15 minutes.
+The recorder is user-started and foreground-notification-backed. It samples core BatteryManager telemetry every 30 seconds on a dedicated worker thread, independent of the Activity, and stores raw samples/events in local SQLite. It refreshes class-tree telemetry every 120 seconds and, when Shizuku is running and authorized, stores privileged snapshots every 120 seconds plus a focused dumpsys batterystats --charged snapshot every 15 minutes.
 
 History reports 24-hour, 7-day, 30-day and 90-day summaries; recent charge/discharge session timing; charge-counter deltas where the fuel gauge exports them; screen-on/off charge/discharge rates; foreground-app time and coincident battery-level changes; and sampling gaps. Threshold times are sample-resolution observations or rate-based estimates. App-level drain is correlated with foreground time and is not a direct per-app current measurement.
 
