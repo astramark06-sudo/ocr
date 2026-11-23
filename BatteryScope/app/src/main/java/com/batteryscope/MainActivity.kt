@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.BatteryManager
+import android.os.HandlerThread
+import java.util.concurrent.atomic.AtomicBoolean
 import android.os.Build
 import android.provider.Settings
 import android.os.Bundle
@@ -41,12 +43,15 @@ class MainActivity : Activity() {
     private var supplyScanCompletedAtMs = 0L
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private lateinit var telemetryThread: HandlerThread
+    private lateinit var telemetryHandler: android.os.Handler
+    private val telemetryReadInFlight = AtomicBoolean(false)
     private var pendingExportFile: File? = null
 
     private val sampler = object : Runnable {
         override fun run() {
             refreshReadings()
-            handler.postDelayed(this, 1000L)
+            handler.postDelayed(this, 2000L)
         }
     }
 
@@ -85,6 +90,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         batteryManager = getSystemService(BATTERY_SERVICE) as BatteryManager
+        telemetryThread = HandlerThread("BatteryScopeLiveTelemetry").apply { start() }
+        telemetryHandler = android.os.Handler(telemetryThread.looper)
         buildUi()
         refreshReadings()
     }
@@ -100,6 +107,12 @@ class MainActivity : Activity() {
     override fun onPause() {
         handler.removeCallbacks(sampler)
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        if (::telemetryThread.isInitialized) telemetryThread.quitSafely()
+        super.onDestroy()
     }
 
     private fun buildUi() {
@@ -412,6 +425,9 @@ class MainActivity : Activity() {
     }
 
     private fun refreshReadings() {
+        if (!telemetryReadInFlight.compareAndSet(false, true)) return
+        telemetryHandler.post {
+        try {
         val reading = readSnapshot()
         val voltageV = reading.rawVoltageMv?.takeIf { it in 2500..5000 }?.div(1000.0)
         val currentMa = reading.currentUa?.div(1000.0)
@@ -423,8 +439,8 @@ class MainActivity : Activity() {
             else String.format(Locale.US, "%.3f %s", value, unit)
         }
 
-        statusText.text = "${reading.status}   •   ${reading.percent?.let { "$it%" } ?: "--"}   •   POWER SOURCE: ${reading.plugged}"
-        batteryText.text = buildString {
+        val statusReport = "${reading.status}   •   ${reading.percent?.let { "$it%" } ?: "--"}   •   POWER SOURCE: ${reading.plugged}"
+        val batteryReport = buildString {
             appendLine("Battery level          ${reading.percent?.let { "$it %" } ?: "Unavailable"}")
             appendLine("Battery voltage        ${reading.rawVoltageMv?.let { if (it in 2500..5000) "$it mV raw" else "$it mV raw — INVALID / outside expected battery range" } ?: "Unavailable"}")
             appendLine("Battery current        ${format(currentMa, "mA")}  (${reading.currentUa?.let { "$it µA raw" } ?: "Unavailable"})")
@@ -445,7 +461,7 @@ class MainActivity : Activity() {
             val node = key.substringBefore('/').lowercase(Locale.US)
             node in listOf("battery", "bms", "main")
         }
-        chargerText.text = buildString {
+        val chargerReport = buildString {
             appendLine("App process sysfs access: ${if (reading.supplyRootReadable) "directory listed" else "denied / unavailable"}")
             appendLine("External power / charger nodes")
             if (external.isEmpty()) appendLine("No readable external-supply attributes from the ordinary app process.")
@@ -460,7 +476,7 @@ class MainActivity : Activity() {
             key.endsWith("/online") && value == "1" &&
                 key.substringBefore('/').lowercase(Locale.US) !in listOf("battery", "bms", "main")
         }.keys
-        diagnosticText.text = buildString {
+        val diagnosticReport = buildString {
             appendLine("Android battery status: ${reading.status}")
             appendLine("Android plug type: ${reading.plugged}")
             appendLine("Kernel external online flags: ${onlineNodes.joinToString().ifBlank { "not observed by app UID" }}")
@@ -471,7 +487,24 @@ class MainActivity : Activity() {
             append("Refresh: ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())} • 1 second")
         }
 
-        refreshHistoryDisplay(false)
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                statusText.text = statusReport
+                batteryText.text = batteryReport
+                chargerText.text = chargerReport
+                diagnosticText.text = diagnosticReport
+                refreshHistoryDisplay(false)
+            }
+        }
+        } catch (t: Throwable) {
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) diagnosticText.text =
+                    "LIVE TELEMETRY READ FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+            }
+        } finally {
+            telemetryReadInFlight.set(false)
+        }
+        }
     }
 
     private fun formatSupplyValue(key: String, raw: String): String {
