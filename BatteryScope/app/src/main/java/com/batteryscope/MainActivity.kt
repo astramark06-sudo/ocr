@@ -731,7 +731,8 @@ class MainActivity : Activity() {
         val lines = mutableListOf<String>()
         lines += "AUTOMATIC MEASUREMENT ACCESS DIAGNOSIS"
         lines += "Power-supply root: " + if (rootVisible) "visible" else "not visible"
-        val supplies = nodes.keys.filter { it.startsWith("power_supply/") }.map { it.substringAfter("power_supply/").substringBefore("/") }.distinct()
+        val nonSupplyRoots = setOf("typec", "usb_power_delivery", "dual_role_usb", "usb_role", "thermal", "hwmon", "@diagnostic")
+        val supplies = nodes.keys.filter { !it.startsWith("@") && it.substringBefore("/") !in nonSupplyRoots }.map { it.substringBefore("/") }.distinct()
         val external = supplies.filter { it !in listOf("battery", "bms", "main") }
         lines += "External power-supply entries: " + external.joinToString().ifBlank { "none discovered" }
         var validPair = false
