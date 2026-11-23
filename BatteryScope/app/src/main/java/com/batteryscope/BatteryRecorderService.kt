@@ -917,7 +917,8 @@ class RecorderDatabase(context: Context) :
         val elapsed = sampleIntervalMs(first, last)
         if (elapsed <= 0L) return "Session duration unavailable."
         val change = current - initial
-        val rate = kotlin.math.abs(change.toDouble()) / (elapsed / 3_600_000.0)
+        val directionMatches = if (wantCharge) change > 0 else change < 0
+        val rate = if (directionMatches) kotlin.math.abs(change.toDouble()) / (elapsed / 3_600_000.0) else 0.0
         val counterDelta = if (first.chargeCounter != null && last.chargeCounter != null) last.chargeCounter - first.chargeCounter else null
         val onMs = run.zipWithNext().sumOf { (a, b) ->
             val dt = b.time - a.time
@@ -928,6 +929,7 @@ class RecorderDatabase(context: Context) :
         out.appendLine("Observed window: " + first.time + " → " + last.time)
         out.appendLine("Level: " + initial + "% → " + current + "% • elapsed: " + durationText(elapsed))
         out.appendLine("Average rate: " + String.format(Locale.US, "%.2f", rate) + " percentage points/hour")
+        if (!directionMatches) out.appendLine(if (wantCharge) "Battery level declined during CHARGING status; no charging-up forecast is valid." else "Battery level increased during DISCHARGING status; no discharge-down forecast is valid.")
         if (counterDelta != null) out.appendLine("Charge-counter delta: " + String.format(Locale.US, "%+.1f mAh", counterDelta / 1000.0) +
             " • " + String.format(Locale.US, "%.1f mAh/hour", kotlin.math.abs(counterDelta) / 1000.0 / (elapsed / 3_600_000.0)) + " (Android estimate)")
         else out.appendLine("Charge-counter rate: unavailable")
@@ -938,6 +940,7 @@ class RecorderDatabase(context: Context) :
             val crossing = thresholdTime(run, threshold, wantCharge)
             val status = when {
                 (wantCharge && initial >= threshold) || (!wantCharge && initial <= threshold) -> "already at threshold at session start"
+                !directionMatches -> if (wantCharge) "not projected: battery level did not increase during this charging-state segment" else "not projected: battery level did not decrease during this discharging-state segment"
                 crossing != null -> durationText(crossing - first.elapsed) + " observed"
                 rate > 0.0 && ((wantCharge && current < threshold) || (!wantCharge && current > threshold)) ->
                     durationText(((kotlin.math.abs(threshold - current).toDouble() / rate) * 3_600_000.0).toLong()) + " estimated from current session average"
