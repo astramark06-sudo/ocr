@@ -17,7 +17,9 @@ BatteryScope is a standalone Android application. It uses standard Android APIs 
 - `app/src/main/java/com/batteryscope/BatteryRecorderService.kt` — foreground recorder, worker thread, event capture, ordinary-app sysfs inventory, SQLite schema/history analytics and CSV writer.
 - `app/src/main/java/com/batteryscope/BatteryCapacityEstimator.kt` — pure estimator using charge-counter/SOC session deltas.
 - `app/src/main/java/com/batteryscope/BatteryRateMath.kt` — tested mA rate and SOC forecast calculations.
+- `app/src/main/java/com/batteryscope/BatteryPercentMath.kt` — validated battery level/scale conversion.
 - `app/src/test/java/com/batteryscope/BatteryRateMathTest.kt` — pure calculation tests.
+- `app/src/test/java/com/batteryscope/BatteryPercentMathTest.kt` — missing/invalid percentage metadata tests.
 - `app/src/main/java/com/batteryscope/BatteryRecorderBootReceiver.kt` — user-intent-based BOOT_COMPLETED resume attempt.
 - `app/src/main/AndroidManifest.xml` — Android permissions, launcher, boot receiver and foreground-service declaration.
 - `app/src/test/java/com/batteryscope/BatteryCapacityEstimatorTest.kt` — capacity-estimator unit tests.
