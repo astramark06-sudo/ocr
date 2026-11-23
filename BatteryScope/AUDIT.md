@@ -24,7 +24,7 @@ BatteryScope is a standalone Android application. It uses standard Android frame
 | Battery presence | `present` broadcast extra | Only reported when the extra exists |
 | Cycle count | optional `cycle_count` extra | Best-effort metadata; not guaranteed on Android 12/OEM builds |
 
-Battery-side current is not USB input current. Voltage × current is a battery-side power estimate, not adapter output power. Android's unavailable sentinels and permission failures are retained as unavailable; they are not converted to zero.
+Battery-side current is not USB input current. Voltage × current is a battery-side power estimate, not adapter output power. Android's unavailable sentinels and permission failures are retained as unavailable; they are not converted to zero. Where ordinary-app-readable battery/BMS sysfs nodes expose `charge_full` and `charge_full_design`, BatteryScope reports their ratio as a separate kernel fuel-gauge capacity-health estimate. It does not silently merge this with the charge-counter/SOC empirical estimate. A `cycle_count` attribute is also surfaced when readable.
 
 ## Capacity estimation method
 
