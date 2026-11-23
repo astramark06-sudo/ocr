@@ -280,3 +280,12 @@ CSV record rows use a record_type field with SAMPLE or EVENT. SAMPLE rows contai
 ### Audit verification scope
 
 The source audit compares fetched Git blob identifiers and byte lengths with the recursive Git tree for the BatteryScope subtree and associated workflows. The exact final source snapshot, file inventory, commit, build and APK digest are recorded in the separate byte-audit report. No source-level inspection can substitute for installing and exercising the application on the target handset.
+
+
+## 1.12 audit correction — CSV records and session timing
+
+The v1.11 CSV writer used a Kotlin string containing two backslashes before `n`. At runtime this produces the two literal characters backslash+n, not a line feed. Consequently, exported CSV could be collapsed into one physical line even though individual fields were quoted. Version 1.12 routes the header, sample rows and event rows through one tested encoder that appends an actual LF record terminator and flattens embedded CR/LF inside field values.
+
+The current-session screen-on accumulator also used wall-clock timestamp differences while total session duration used the monotonic-aware interval helper. Version 1.12 uses the same interval helper for both, keeping screen-on/off duration consistent with session duration when the system wall clock is adjusted.
+
+JVM unit tests cover quoted commas, escaped quotes, embedded line breaks, empty columns and actual record termination. These tests validate the CSV encoder only; they do not replace SQLite integration or handset validation.
