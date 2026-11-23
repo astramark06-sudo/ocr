@@ -1,4 +1,4 @@
-# BatteryScope 1.9 — Engineering Audit
+# BatteryScope 1.11 — Engineering Audit
 
 ## 1.9 ordinary-app access diagnosis
 
@@ -220,7 +220,7 @@ Release acceptance requires:
 - When granted, BatteryScope records foreground package transitions and the package associated with each sampled interval, plus whether the screen was interactive.
 - Foreground duration is approximate at the 30-second sampling resolution.
 - The current implementation does not measure a per-app electrical current. Any later drain correlation must be labelled estimated/correlated, not direct measurement.
-- Android BatteryStats attribution remains a separate source and requires Shizuku access to dumpsys output. The current persistent service does not keep the Shizuku UserService bound after the Activity is destroyed.
+- Android BatteryStats attribution remains a separate source and requires Shizuku access to dumpsys output. The recorder now binds its own Shizuku UserService for the lifetime of the foreground recorder, after explicit user authorization; the Activity can bind separately for interactive audit controls.
 
 ### Analytics limits
 - Rolling 24-hour, 7-day and 30-day summaries report charge/discharge time represented by valid adjacent samples and net percentage change per recorded hour.
@@ -239,3 +239,18 @@ Release acceptance requires:
 - History summary windows: 24 hours, 7 days, 30 days and 90 days. Raw sample/event rows remain stored locally and can be exported.
 - Session analytics report charge/discharge rates, screen-on/off rates, charge-counter deltas, recent-session duration and percentage threshold times. Estimates are explicitly marked; gaps over 90 seconds are excluded from interval rates.
 - Foreground app attribution uses Usage Access and adjacent samples. Coincident discharge is correlated/estimated; it is not a direct per-app electrical measurement.
+
+
+## 9. 1.11 recorder engineering updates
+
+- \`BatteryRecorderService\` samples BatteryManager data every 30 seconds on a dedicated HandlerThread and is independent of MainActivity lifecycle.
+- A partial CPU wake lock is held for the user-enabled recording session to prevent ordinary deep-sleep suspension from deferring the sampling handler. This increases BatteryScope's own energy consumption; the notification and event log disclose it. The lock is released on explicit stop and service destruction.
+- On Android 14+, the service declares \`specialUse\` with a descriptive subtype. This is a narrowly described ongoing user-visible recorder and may require justification/review if distributed through Google Play.
+- User-enabled recording is persisted separately from runtime service state. The boot receiver attempts to restart only a recorder the user left enabled. It cannot collect data while powered off, before unlock, or when OS/OEM restrictions reject the foreground-service start.
+- If Shizuku is available and permission has been granted, the recorder binds its own read-only UserService. It saves \`snapshotLink()\` every 120 seconds and a full \`scan()\` every 15 minutes; the full scan includes dumpsys battery, usb, thermalservice, power and batterystats --charged. Shizuku data is retained in the raw \`power_supply_json\` field with source text intact.
+- The recorder continues ordinary-app reads if Shizuku is unavailable. It records unavailable/error states for the privileged source.
+- The database stores sample rows and event rows; raw history is retained until user deletion. CSV export streams all rows.
+- Rolling summaries cover 24 hours, 7 days, 30 days and 90 days. They calculate total and screen-on/off charge/discharge percentage rates, charge-counter changes where available, recent session threshold times, foreground-app durations and coincident battery-level changes.
+- App-level drain figures are time-correlated estimates, not direct per-app electrical measurements. BatteryStats dumpsys is an Android/system attribution estimate, not a meter inserted per app.
+- Intervals longer than 90 seconds are excluded from rate calculations. The dashboard reports gap count, estimated uncovered duration, longest gap and average interval. A timestamp gap alone cannot prove whether the cause was force-stop, powered-off state, OS/OEM process management, Doze or a permission/source failure.
+
