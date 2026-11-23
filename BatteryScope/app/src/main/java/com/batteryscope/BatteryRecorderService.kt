@@ -977,25 +977,35 @@ class RecorderDatabase(context: Context) :
     }
 
     fun exportCsv(writer: Writer) {
-        writer.write("record_type,timestamp_ms,battery_percent,battery_status,plug_type,battery_voltage_mv,battery_current_ua,battery_average_current_ua,charge_counter_uah,energy_counter_nwh,temperature_c,battery_health,technology,screen_on,foreground_package,usage_access,power_supply_json,usb_voltage_candidate_uv,usb_current_candidate_ua,event_type,details\n")
-        readableDatabase.rawQuery("SELECT * FROM samples ORDER BY timestamp_ms", null).use { c ->
-            while (c.moveToNext()) {
-                val names = listOf("battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua")
-                val fields = mutableListOf("SAMPLE", c.getLong(c.getColumnIndexOrThrow("timestamp_ms")).toString())
-                names.forEach { fields += value(c, it) }
-                fields += listOf("", "")
-                writer.write(fields.joinToString(",") { csv(it) } + "\n")
-            }
-        }
-        readableDatabase.rawQuery("SELECT timestamp_ms,event_type,details FROM events ORDER BY timestamp_ms", null).use { c ->
-            while (c.moveToNext()) {
-                val fields = listOf("EVENT", c.getLong(0).toString()) + List(17) { "" } + listOf(c.getString(1), c.getString(2))
-                writer.write(fields.joinToString(",") { csv(it) } + "\n")
+        writer.write("record_type,timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,battery_voltage_mv,battery_current_ua,battery_average_current_ua,charge_counter_uah,energy_counter_nwh,temperature_c,battery_health,technology,screen_on,foreground_package,usage_access,power_supply_json,usb_voltage_candidate_uv,usb_current_candidate_ua,event_type,details\\n")
+        val sampleNames = listOf("battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua")
+        readableDatabase.rawQuery("SELECT * FROM samples ORDER BY timestamp_ms", null).use { samples ->
+            readableDatabase.rawQuery("SELECT timestamp_ms,event_type,details FROM events ORDER BY timestamp_ms", null).use { events ->
+                var hasSample = samples.moveToFirst()
+                var hasEvent = events.moveToFirst()
+                while (hasSample || hasEvent) {
+                    val useSample = hasSample && (!hasEvent || samples.getLong(samples.getColumnIndexOrThrow("timestamp_ms")) <= events.getLong(0))
+                    if (useSample) {
+                        val fields = mutableListOf(
+                            "SAMPLE",
+                            samples.getLong(samples.getColumnIndexOrThrow("timestamp_ms")).toString(),
+                            value(samples, "elapsed_realtime_ms")
+                        )
+                        sampleNames.forEach { fields += value(samples, it) }
+                        fields += listOf("", "")
+                        writer.write(fields.joinToString(",") { csv(it) } + "\\n")
+                        hasSample = samples.moveToNext()
+                    } else {
+                        val fields = listOf("EVENT", events.getLong(0).toString(), "") +
+                            List(sampleNames.size) { "" } + listOf(events.getString(1), events.getString(2))
+                        writer.write(fields.joinToString(",") { csv(it) } + "\\n")
+                        hasEvent = events.moveToNext()
+                    }
+                }
             }
         }
         writer.flush()
     }
-
     private fun value(c: Cursor, column: String): String {
         val index = c.getColumnIndexOrThrow(column)
         return if (c.isNull(index)) "" else c.getString(index) ?: ""
