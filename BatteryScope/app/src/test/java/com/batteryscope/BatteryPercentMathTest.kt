@@ -7,9 +7,9 @@ import org.junit.Test
 class BatteryPercentMathTest {
     @Test
     fun convertsValidLevelAndScale() {
-        assertEquals(50, BatteryPercentMath.percent(50, 100))
-        assertEquals(100, BatteryPercentMath.percent(100, 100))
-        assertEquals(0, BatteryPercentMath.percent(0, 100))
+        assertEquals(50L, BatteryPercentMath.percent(50, 100)!!.toLong())
+        assertEquals(100L, BatteryPercentMath.percent(100, 100)!!.toLong())
+        assertEquals(0L, BatteryPercentMath.percent(0, 100)!!.toLong())
     }
 
     @Test
