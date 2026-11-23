@@ -62,10 +62,15 @@ class MainActivity : Activity() {
         val percent: Int?,
         val rawVoltageMv: Int?,
         val currentUa: Long?,
+        val currentPropertyStatus: String,
         val averageCurrentUa: Long?,
+        val averageCurrentPropertyStatus: String,
         val chargeCounterUah: Long?,
+        val chargeCounterPropertyStatus: String,
         val energyNwh: Long?,
+        val energyPropertyStatus: String,
         val temperatureC: Double?,
+        val batteryBroadcastAvailable: Boolean,
         val status: String,
         val plugged: String,
         val health: String,
@@ -248,11 +253,19 @@ class MainActivity : Activity() {
     private fun batteryIntent(): Intent? =
         registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
 
-    private fun longProperty(id: Int): Long? = try {
+    private data class PropertyRead(val value: Long?, val status: String)
+
+    private fun readLongProperty(id: Int): PropertyRead = try {
         val value = batteryManager.getLongProperty(id)
-        if (value == Long.MIN_VALUE || value == Long.MAX_VALUE) null else value
-    } catch (_: Throwable) {
-        null
+        if (value == Long.MIN_VALUE || value == Long.MAX_VALUE) {
+            PropertyRead(null, "ANDROID_UNAVAILABLE_SENTINEL")
+        } else {
+            PropertyRead(value, "AVAILABLE")
+        }
+    } catch (t: SecurityException) {
+        PropertyRead(null, "SECURITY_EXCEPTION")
+    } catch (t: Throwable) {
+        PropertyRead(null, "ERROR:" + t.javaClass.simpleName)
     }
 
     /** Enumerates read-only kernel power, USB-C, PD, thermal and hwmon class attributes. */
@@ -452,15 +465,24 @@ class MainActivity : Activity() {
             else -> "UNKNOWN"
         }
         val technology = intent?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "NOT REPORTED"
+        val currentRead = readLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        val averageRead = readLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)
+        val chargeRead = readLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
+        val energyRead = readLongProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
         val (supplies, readable) = readSupplyNodes()
         return Reading(
             percent = percent,
             rawVoltageMv = rawVoltage.takeIf { it > 0 },
-            currentUa = longProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW),
-            averageCurrentUa = longProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE),
-            chargeCounterUah = longProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER),
-            energyNwh = longProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER),
+            currentUa = currentRead.value,
+            currentPropertyStatus = currentRead.status,
+            averageCurrentUa = averageRead.value,
+            averageCurrentPropertyStatus = averageRead.status,
+            chargeCounterUah = chargeRead.value,
+            chargeCounterPropertyStatus = chargeRead.status,
+            energyNwh = energyRead.value,
+            energyPropertyStatus = energyRead.status,
             temperatureC = temp,
+            batteryBroadcastAvailable = intent != null,
             status = status,
             plugged = plugged,
             health = health,
@@ -548,10 +570,14 @@ class MainActivity : Activity() {
             appendLine("Android plug type: ${reading.plugged}")
             appendLine("Kernel external online flags: ${onlineNodes.joinToString().ifBlank { "not observed by app UID" }}")
             appendLine("Ordinary app sysfs: ${if (reading.supplyRootReadable) "directory visible; individual files may still be denied" else "not visible"}")
-            appendLine("Android charge counter: ${reading.chargeCounterUah?.let { "available (${it} µAh)" } ?: "unavailable — fuel-gauge property unsupported, withheld or not exposed by this ROM"}")
-            appendLine("Instantaneous battery current: ${reading.currentUa?.let { "available (${it} µA)" } ?: "unavailable — BATTERY_PROPERTY_CURRENT_NOW returned Android's unavailable sentinel or failed"}")
-            appendLine("Average battery current: ${reading.averageCurrentUa?.let { "available (${it} µA)" } ?: "unavailable — BATTERY_PROPERTY_CURRENT_AVERAGE not exposed or unsupported"}")
-            appendLine("Battery energy counter: ${reading.energyNwh?.let { "available (${it} nWh)" } ?: "unavailable — ENERGY_COUNTER not exposed or unsupported"}")
+            appendLine("ACTION_BATTERY_CHANGED: " + if (reading.batteryBroadcastAvailable) "available" else "NOT AVAILABLE from Android sticky broadcast")
+            appendLine("Battery percentage: " + (reading.percent?.let { "available (${it}%)" } ?: "unavailable — EXTRA_LEVEL/EXTRA_SCALE missing or invalid"))
+            appendLine("Battery voltage: " + (reading.rawVoltageMv?.let { "available (${it} mV)" } ?: "unavailable — EXTRA_VOLTAGE missing or invalid"))
+            appendLine("Battery temperature: " + (reading.temperatureC?.let { "available (${it} °C)" } ?: "unavailable — EXTRA_TEMPERATURE missing or outside accepted range"))
+            appendLine("Android charge counter: ${reading.chargeCounterUah?.let { "available (${it} µAh)" } ?: "unavailable — " + reading.chargeCounterPropertyStatus}")
+            appendLine("Instantaneous battery current: ${reading.currentUa?.let { "available (${it} µA)" } ?: "unavailable — " + reading.currentPropertyStatus}")
+            appendLine("Average battery current: ${reading.averageCurrentUa?.let { "available (${it} µA)" } ?: "unavailable — " + reading.averageCurrentPropertyStatus}")
+            appendLine("Battery energy counter: ${reading.energyNwh?.let { "available (${it} nWh)" } ?: "unavailable — " + reading.energyPropertyStatus}")
             appendLine("Invalid charger status: ${reading.invalidCharger?.let { if (it != 0) "framework reports invalid charger ($it)" else "framework reports no invalid-charger flag" } ?: "extra not supplied by Android/ROM"}")
             appendLine("Charger advertised maximum current/voltage: ${if (reading.maxChargingCurrentUa != null || reading.maxChargingVoltageUv != null) "partially or fully reported in ACTION_BATTERY_CHANGED" else "not supplied by Android/charger; live USB input V/I may require restricted kernel driver nodes"}")
             appendLine("Battery cycle count: ${reading.cycleCount?.let { "Android extra=$it" } ?: kernelCycleCount?.let { "kernel power_supply=$it" } ?: "not exposed by Android extra or readable battery/BMS sysfs nodes"}")
