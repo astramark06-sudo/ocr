@@ -409,8 +409,8 @@ class MainActivity : Activity() {
                 setBridgeStatus("Shizuku is not running. Open Shizuku, start it using Wireless debugging, then retry.")
                 return
             }
-            if (Shizuku.getVersion() < 10) {
-                setBridgeStatus("Shizuku API is too old for UserService. Update Shizuku to a current version.")
+            if (Shizuku.getVersion() < 11) {
+                setBridgeStatus("Shizuku API is below v11, which BatteryScope requires for UserService. Update Shizuku and retry.")
                 return
             }
             when (Shizuku.checkSelfPermission()) {
