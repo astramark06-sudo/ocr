@@ -649,7 +649,7 @@ class RecorderDatabase(context: Context) :
     }
 
     private data class Row(
-        val time: Long, val pct: Int?, val state: String, val plug: String,
+        val time: Long, val elapsed: Long, val pct: Int?, val state: String, val plug: String,
         val chargeCounter: Long?, val screen: Boolean, val app: String
     )
     private data class AppMetric(val name: String, val ms: Long, val charge: Double, val drain: Double, val pluggedDrain: Double) {
@@ -676,13 +676,13 @@ class RecorderDatabase(context: Context) :
     private fun readWindow(from: Long): List<Row> {
         val rows = mutableListOf<Row>()
         readableDatabase.rawQuery(
-            "SELECT timestamp_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
+            "SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
             arrayOf(from.toString())
         ).use { c ->
             while (c.moveToNext()) rows += Row(
-                c.getLong(0), if (c.isNull(1)) null else c.getInt(1),
-                c.getString(2) ?: "UNKNOWN", c.getString(3) ?: "NONE",
-                if (c.isNull(4)) null else c.getLong(4), c.getInt(5) == 1, c.getString(6) ?: ""
+                c.getLong(0), c.getLong(1), if (c.isNull(2)) null else c.getInt(2),
+                c.getString(3) ?: "UNKNOWN", c.getString(4) ?: "NONE",
+                if (c.isNull(5)) null else c.getLong(5), c.getInt(6) == 1, c.getString(7) ?: ""
             )
         }
         return rows
@@ -724,6 +724,12 @@ class RecorderDatabase(context: Context) :
             " (gap cause cannot be inferred from timestamps alone)"
     }
 
+    /** Prefer monotonic elapsedRealtime within a boot; fall back to wall time across a reboot. */
+    private fun sampleIntervalMs(before: Row, after: Row): Long {
+        val monotonicDelta = after.elapsed - before.elapsed
+        return if (monotonicDelta > 0L) monotonicDelta else after.time - before.time
+    }
+
     private fun charging(row: Row) = row.state == "CHARGING"
     private fun discharging(row: Row) = row.state == "DISCHARGING"
 
@@ -747,11 +753,12 @@ class RecorderDatabase(context: Context) :
         var screenOff = 0
         var previous: Row? = null
         readableDatabase.rawQuery(
-            """SELECT timestamp_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package
+            """SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package
                FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms""".trimIndent(),
             arrayOf(from.toString())
         ).use { cursor ->
             val iTime = cursor.getColumnIndexOrThrow("timestamp_ms")
+            val iElapsed = cursor.getColumnIndexOrThrow("elapsed_realtime_ms")
             val iPct = cursor.getColumnIndexOrThrow("battery_percent")
             val iState = cursor.getColumnIndexOrThrow("battery_status")
             val iPlug = cursor.getColumnIndexOrThrow("plug_type")
@@ -761,6 +768,7 @@ class RecorderDatabase(context: Context) :
             while (cursor.moveToNext()) {
                 val after = Row(
                     cursor.getLong(iTime),
+                    cursor.getLong(iElapsed),
                     if (cursor.isNull(iPct)) null else cursor.getInt(iPct),
                     cursor.getString(iState) ?: "UNKNOWN",
                     cursor.getString(iPlug) ?: "NONE",
@@ -772,7 +780,7 @@ class RecorderDatabase(context: Context) :
                 if (after.screen) screenOn++ else screenOff++
                 val before = previous
                 if (before != null) {
-                    val dt = after.time - before.time
+                    val dt = sampleIntervalMs(before, after)
                     if (dt in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) {
                         val sameApp = after.screen && after.app.isNotBlank() && after.app == before.app
                         if (sameApp) appTime[after.app] = (appTime[after.app] ?: 0L) + dt
@@ -828,7 +836,7 @@ class RecorderDatabase(context: Context) :
             val firstFull = wantCharge && row.state == "FULL" && row.plug != "NONE"
             if (matches(row)) {
                 if (current.isNotEmpty()) {
-                    val gap = row.time - current.last().time
+                    val gap = sampleIntervalMs(current.last(), row)
                     if (gap !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) {
                         sessions += current
                         current = mutableListOf()
@@ -857,11 +865,11 @@ class RecorderDatabase(context: Context) :
             if (run.size < 2 || first.pct == null || last.pct == null) {
                 start + " • one sample only; elapsed time and rate unavailable"
             } else {
-                val elapsed = (last.time - first.time).coerceAtLeast(0L)
+                val elapsed = sampleIntervalMs(first, last).coerceAtLeast(0L)
                 val delta = last.pct - first.pct
                 val rate = if (elapsed > 0L) kotlin.math.abs(delta.toDouble()) / (elapsed / 3_600_000.0) else 0.0
                 val onMs = run.zipWithNext().sumOf { (a, b) ->
-                    val dt = b.time - a.time
+                    val dt = sampleIntervalMs(a, b)
                     if (dt in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3) && b.screen) dt else 0L
                 }
                 val counter = if (first.chargeCounter != null && last.chargeCounter != null)
@@ -887,13 +895,13 @@ class RecorderDatabase(context: Context) :
         // Include the first FULL sample after a charging run, but not later full/plugged idle time.
         if (wantCharge && end < rows.lastIndex) {
             val next = rows[end + 1]
-            val gap = next.time - rows[end].time
+            val gap = sampleIntervalMs(rows[end], next)
             if (next.state == "FULL" && next.plug != "NONE" &&
                 gap in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) end++
         }
         var start = end
         while (start > 0) {
-            val gap = rows[start].time - rows[start - 1].time
+            val gap = sampleIntervalMs(rows[start - 1], rows[start])
             val prev = rows[start - 1]
             val prevMatches = matches(prev) || (wantCharge && prev.state == "FULL" && prev.plug != "NONE")
             if (!prevMatches || gap !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) break
@@ -904,7 +912,7 @@ class RecorderDatabase(context: Context) :
         val first = run.first(); val last = run.last()
         val initial = first.pct ?: return "Battery percentage unavailable."
         val current = last.pct ?: return "Battery percentage unavailable."
-        val elapsed = last.time - first.time
+        val elapsed = sampleIntervalMs(first, last)
         if (elapsed <= 0L) return "Session duration unavailable."
         val change = current - initial
         val rate = kotlin.math.abs(change.toDouble()) / (elapsed / 3_600_000.0)
@@ -928,7 +936,7 @@ class RecorderDatabase(context: Context) :
             val crossing = thresholdTime(run, threshold, wantCharge)
             val status = when {
                 (wantCharge && initial >= threshold) || (!wantCharge && initial <= threshold) -> "already at threshold at session start"
-                crossing != null -> durationText(crossing - first.time) + " observed"
+                crossing != null -> durationText(crossing - first.elapsed) + " observed"
                 rate > 0.0 && ((wantCharge && current < threshold) || (!wantCharge && current > threshold)) ->
                     durationText(((kotlin.math.abs(threshold - current).toDouble() / rate) * 3_600_000.0).toLong()) + " estimated from current session average"
                 else -> "not reached / insufficient data"
@@ -943,8 +951,8 @@ class RecorderDatabase(context: Context) :
         for (i in 1 until rows.size) {
             val before = rows[i - 1].pct ?: continue
             val after = rows[i].pct ?: continue
-            if (upward && before < threshold && after >= threshold) return rows[i].time
-            if (!upward && before > threshold && after <= threshold) return rows[i].time
+            if (upward && before < threshold && after >= threshold) return rows[i].elapsed
+            if (!upward && before > threshold && after <= threshold) return rows[i].elapsed
         }
         return null
     }
