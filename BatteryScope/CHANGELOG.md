@@ -86,3 +86,6 @@ All versions are debug APK development builds unless a signed release is explici
 - Removed SQLite access from the boot-completed broadcast receiver; boot-resume failures are retained in preferences and surfaced in diagnostics.
 - Added a dedicated Android GitHub Actions build/test/APK-artifact workflow.
 - No application ID, versionCode or SQLite schema change in this hardening pass.
+
+- Recent charging/discharging session reports now separate display-on/display-off SOC rates, signed battery-side mA rates and time-to-threshold estimates.
+- Per-app history now includes coincident charge-counter mAh movement when valid, explicitly labelled as foreground correlation rather than direct app power measurement.
