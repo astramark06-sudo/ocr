@@ -27,6 +27,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
+import android.provider.Settings
 import org.json.JSONObject
 import java.io.Writer
 import java.text.SimpleDateFormat
@@ -247,6 +248,7 @@ class BatteryRecorderService : Service() {
     private fun sample() {
         val now = System.currentTimeMillis()
         val elapsed = SystemClock.elapsedRealtime()
+        val bootCount = try { Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1).takeIf { it >= 0 } } catch (_: Throwable) { null }
         val intent = batteryIntent ?: registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
@@ -322,6 +324,7 @@ class BatteryRecorderService : Service() {
         val row = ContentValues().apply {
             put("timestamp_ms", now)
             put("elapsed_realtime_ms", elapsed)
+            if (bootCount != null) put("boot_count", bootCount)
             if (percent != null) put("battery_percent", percent)
             put("battery_status", status)
             put("plug_type", plug)
@@ -573,11 +576,11 @@ class BatteryRecorderService : Service() {
 
 /** SQLite keeps raw samples/events until the user deletes app data. */
 class RecorderDatabase(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "batteryscope_history.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "batteryscope_history.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE samples (
-            timestamp_ms INTEGER PRIMARY KEY, elapsed_realtime_ms INTEGER NOT NULL,
+            timestamp_ms INTEGER PRIMARY KEY, elapsed_realtime_ms INTEGER NOT NULL, boot_count INTEGER,
             battery_percent INTEGER, battery_status TEXT NOT NULL, plug_type TEXT NOT NULL,
             battery_voltage_mv INTEGER, battery_current_ua INTEGER, battery_average_current_ua INTEGER,
             charge_counter_uah INTEGER, energy_counter_nwh INTEGER, temperature_c REAL,
@@ -595,7 +598,9 @@ class RecorderDatabase(context: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Future migrations must preserve raw history.
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE samples ADD COLUMN boot_count INTEGER")
+        }
     }
 
     fun insertSample(values: ContentValues) {
@@ -680,7 +685,7 @@ class RecorderDatabase(context: Context) :
 
     private data class Row(
         val time: Long, val elapsed: Long, val pct: Int?, val state: String, val plug: String,
-        val chargeCounter: Long?, val screen: Boolean, val app: String
+        val chargeCounter: Long?, val screen: Boolean, val app: String, val bootCount: Int?
     )
     private data class AppMetric(val name: String, val ms: Long, val charge: Double, val drain: Double, val pluggedDrain: Double) {
         val minutes: Long get() = ms / 60_000L
@@ -706,13 +711,14 @@ class RecorderDatabase(context: Context) :
     private fun readWindow(from: Long): List<Row> {
         val rows = mutableListOf<Row>()
         readableDatabase.rawQuery(
-            "SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
+            "SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package,boot_count FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
             arrayOf(from.toString())
         ).use { c ->
             while (c.moveToNext()) rows += Row(
                 c.getLong(0), c.getLong(1), if (c.isNull(2)) null else c.getInt(2),
                 c.getString(3) ?: "UNKNOWN", c.getString(4) ?: "NONE",
-                if (c.isNull(5)) null else c.getLong(5), c.getInt(6) == 1, c.getString(7) ?: ""
+                if (c.isNull(5)) null else c.getLong(5), c.getInt(6) == 1, c.getString(7) ?: "",
+                if (c.isNull(8)) null else c.getInt(8)
             )
         }
         return rows
@@ -736,7 +742,8 @@ class RecorderDatabase(context: Context) :
                     if (cursor.isNull(2)) null else cursor.getInt(2),
                     cursor.getString(3) ?: "UNKNOWN", cursor.getString(4) ?: "NONE",
                     if (cursor.isNull(5)) null else cursor.getLong(5),
-                    cursor.getInt(6) == 1, cursor.getString(7) ?: ""
+                    cursor.getInt(6) == 1, cursor.getString(7) ?: "",
+                    if (cursor.isNull(8)) null else cursor.getInt(8)
                 )
                 val before = previous
                 if (before != null) {
@@ -760,10 +767,11 @@ class RecorderDatabase(context: Context) :
             " (uses monotonic time when samples are within the same boot; wall time across reboot; exact gap cause is unknown)"
     }
 
-    private fun sampleIntervalMs(before: Row, after: Row): Long {
-        val monotonicDelta = after.elapsed - before.elapsed
-        return if (monotonicDelta > 0L) monotonicDelta else after.time - before.time
-    }
+    private fun sampleIntervalMs(before: Row, after: Row): Long =
+        RecorderTimeMath.intervalMs(
+            before.time, before.elapsed, before.bootCount,
+            after.time, after.elapsed, after.bootCount
+        )
 
     private fun observedDurationMs(rows: List<Row>): Long {
         var total = 0L
@@ -797,7 +805,7 @@ class RecorderDatabase(context: Context) :
         var screenOff = 0
         var previous: Row? = null
         readableDatabase.rawQuery(
-            """SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package
+            """SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package,boot_count
                FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms""".trimIndent(),
             arrayOf(from.toString())
         ).use { cursor ->
@@ -809,6 +817,7 @@ class RecorderDatabase(context: Context) :
             val iCounter = cursor.getColumnIndexOrThrow("charge_counter_uah")
             val iScreen = cursor.getColumnIndexOrThrow("screen_on")
             val iApp = cursor.getColumnIndexOrThrow("foreground_package")
+            val iBootCount = cursor.getColumnIndexOrThrow("boot_count")
             while (cursor.moveToNext()) {
                 val after = Row(
                     cursor.getLong(iTime),
@@ -818,7 +827,8 @@ class RecorderDatabase(context: Context) :
                     cursor.getString(iPlug) ?: "NONE",
                     if (cursor.isNull(iCounter)) null else cursor.getLong(iCounter),
                     cursor.getInt(iScreen) == 1,
-                    cursor.getString(iApp) ?: ""
+                    cursor.getString(iApp) ?: "",
+                    if (cursor.isNull(iBootCount)) null else cursor.getInt(iBootCount)
                 )
                 count++
                 if (after.screen) screenOn++ else screenOff++
@@ -1020,7 +1030,7 @@ class RecorderDatabase(context: Context) :
 
     fun exportCsv(writer: Writer) {
         writer.write(RecorderCsv.encodeRow(listOf("record_type","timestamp_ms","elapsed_realtime_ms","battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","event_type","details")))
-        val sampleNames = listOf("battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua")
+        val sampleNames = listOf("battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","boot_count")
         readableDatabase.rawQuery("SELECT * FROM samples ORDER BY timestamp_ms", null).use { samples ->
             readableDatabase.rawQuery("SELECT timestamp_ms,event_type,details FROM events ORDER BY timestamp_ms", null).use { events ->
                 var hasSample = samples.moveToFirst()
