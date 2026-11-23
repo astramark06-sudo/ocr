@@ -201,7 +201,7 @@ class BatteryRecorderService : Service() {
         val scale = intent?.extras?.let {
             if (it.containsKey(BatteryManager.EXTRA_SCALE)) it.getInt(BatteryManager.EXTRA_SCALE, -1) else -1
         } ?: -1
-        val percent = if (level >= 0 && scale > 0) level * 100 / scale else null
+        val percent = BatteryPercentMath.percent(level, scale)
         val voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
         val temperature = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
         val statusCode = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
