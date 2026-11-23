@@ -1,7 +1,7 @@
 ## 1.11 — continuous recorder, session analytics and privileged history
 - Added a user-started foreground telemetry recorder on a dedicated worker thread, independent of Activity visibility and task swipes.
 - Added local SQLite sample/event history, 30-second framework sampling and 120-second bounded power-supply, Type-C, USB-PD, USB-role, thermal and hwmon inventories.
-- Added optional Shizuku service binding for recurring read-only power-path snapshots and 15-minute full framework audits, including dumpsys battery, usb, thermalservice, power and batterystats --charged.
+- Added optional Shizuku service binding for recurring read-only power-path snapshots and 15-minute focused dumpsys batterystats --charged snapshots; the complete multi-section framework audit remains on demand.
 - Added 24-hour, 7-day, 30-day and 90-day summaries; session charge/discharge rates; mAh-rate estimates where charge-counter readings are valid; screen-on/off comparison; app foreground time and correlated charge/discharge deltas.
 - Added observed/estimated time to charging thresholds 50/80/90/100% and discharge thresholds 80/50/20/10/0%, plus sampling-gap counts, longest gap and uncovered-time estimate.
 - Added partial CPU wake lock while recording to reduce deep-sleep sampling gaps; the ongoing notification explains that this increases BatteryScope's own power use. The lock is released on stop/destroy.
