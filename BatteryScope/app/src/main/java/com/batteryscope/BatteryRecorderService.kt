@@ -258,9 +258,10 @@ class BatteryRecorderService : Service() {
         val charge = longProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
         val energy = longProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
         val currentQuality = BatteryMeasurementQuality.current(current, status, plug).status
-        if (currentQuality != lastCurrentMeasurementQuality) {
+        val currentQualityKey = status + "|" + plug + "|" + currentQuality
+        if (currentQualityKey != lastCurrentMeasurementQuality) {
             event("BATTERY_CURRENT_QUALITY", "quality=" + currentQuality + "; status=" + status + "; plug=" + plug + "; raw_current_ua=" + (current?.toString() ?: "UNAVAILABLE"))
-            lastCurrentMeasurementQuality = currentQuality
+            lastCurrentMeasurementQuality = currentQualityKey
         }
         val voltageQuality = BatteryMeasurementQuality.voltage(voltage.takeIf { it > 0 }).status
         if (voltageQuality != lastVoltageMeasurementQuality) {
