@@ -59,3 +59,6 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 
 - Added user-selectable continuous (wake lock enabled) and low-impact (wake lock released) recording modes. Mode is persisted, reflected in the foreground notification and diagnosis, and recorded as an event when changed. Low-impact mode allows Android deep sleep to create measurable gaps rather than forcing continuous CPU wakeups.
 - Fixed Activity teardown to stop the live telemetry HandlerThread.
+
+- Added live kernel fuel-gauge parsing for optional `cycle_count`, `charge_full` and `charge_full_design`; displays a separate gauge-reported capacity-health ratio and explicit missing-attribute diagnosis. This remains distinct from the empirical charge-counter/SOC capacity estimate.
+- Added the optional hardware inventory field-cap diagnostic and Android thermal status to the live scan.
