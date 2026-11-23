@@ -91,11 +91,28 @@ Sampling target is 30 seconds, but there are seven gaps longer than 90 seconds; 
 - Added eight JVM tests for polarity validation, ambiguous states, voltage range and guarded battery-side power calculation.
 - Version changed to 1.15 / versionCode 16. Package ID remains `com.batteryscope`; SQLite schema remains v4.
 
+## v1.15 build and binary verification
+
+The authoritative Android workflow [45223861385](https://github.com/astramark06-sudo/test/actions/runs/45223861385) completed successfully for app source commit `480a567cd7c90f552976dc60472fa6ef11a5e126`.
+
+- Test result: 22 tests passed; 0 failures, 0 errors, 0 skipped.
+- Workflow artifact ID: `14840939491`; artifact name: `BatteryScope-debug-480a567cd7c90f552976dc60472fa6ef11a5e126`.
+- Artifact ZIP size: 924,594 bytes; SHA-256: `2c0b385d7416471e7c40817a5d2fe34aa05a2eaaf624307bfeebf001bb31195c`.
+- APK size: 914,326 bytes; SHA-256: `0c8f37eb4777b9ece9a1241a85e4805bab06dd5fd4b0bdde339f748c384b32ac`.
+- Metadata: `com.batteryscope`, version 1.15 / versionCode 16, minSdk 26, targetSdk 35, compileSdk 35; APK is debuggable.
+- CI verified APK Signature Scheme v2. Signer certificate SHA-256: `fe463192e3a055244ed627fbd8a8907f535263166e619c5bca686924b15094c2`.
+
+The APK ZIP CRC check passed. All three DEX headers passed file-size, SHA-1 and Adler-32 integrity checks; the v1.15 DEX contains `BatteryMeasurementQuality`, the current/voltage quality event names and the source-timestamp event writer. The APK contains 16 ZIP entries. Local Android `apksigner`/JADX tools were not available, so signature verification is based on the workflow's `apksigner` report and the DEX audit is structural, not a full instruction-by-instruction decompilation.
+
+The repository had two push-triggered APK workflows. They produced APKs with identical uncompressed ZIP entries but different APK hashes/signatures because each independent runner used a different debug signing key. The older `batteryscope-build.yml` workflow did not perform signature verification and was removed in commit `831469704f50e6c5fff28974d4b2d8027156ee68`. `batteryscope-android.yml` is now the single authoritative build/verification workflow.
+
+The v1.14 debug certificate was `3c75edb5262b17164453949bb90113e133edc2daeceb10846cd233d2be8194b5`; the v1.15 certificate is `fe463192e3a055244ed627fbd8a8907f535263166e619c5bca686924b15094c2`. They differ. The v1.15 debug APK is therefore **not compatible with an in-place update** of the v1.14 installation. No install or overwrite was attempted. A stable production signing key is still required for safe future upgrades.
+
 ## Verification boundary and outstanding work
 
-This audit distinguishes source review, artifact integrity, CI build/test, installation and physical-device validation. The v1.14 artifact is integrity-checked and its workflow succeeded. The v1.15 corrective source must still pass its own GitHub Actions build and test run before a new APK can be called verified.
+This audit distinguishes source review, artifact integrity, CI build/test, installation and physical-device validation. The v1.14 and v1.15 artifacts have separate verified workflow records. The v1.15 build and 22-test suite passed; physical-device correctness and installation/update compatibility remain unverified.
 
-No physical RMX2161 test has been performed by this audit. In particular, the v1.15 app must be tested while unplugged/discharging and while charging to confirm that the new quality flags appear and that no invalid current/wattage is shown. Voltage must be independently confirmed before a numeric wattage can be reported. Actual USB input watts remain unavailable unless the handset exposes a semantically verified USB-side V/I source.
+No physical RMX2161 test has been performed by this audit. The v1.15 APK must still be tested while unplugged/discharging and while charging to confirm the quality flags on the actual device. Voltage must be independently confirmed before a numeric wattage can be reported. Actual USB input watts remain unavailable unless the handset exposes a semantically verified USB-side V/I source.
 
 The app is not yet the complete device-wide monitor described in the architecture document. Its current implementation is primarily battery telemetry, local history, best-effort kernel inspection and optional foreground-app correlation. Implementing the remaining public Android collectors is a separate engineering phase.
 
