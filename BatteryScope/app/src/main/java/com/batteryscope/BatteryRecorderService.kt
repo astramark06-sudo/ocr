@@ -113,7 +113,16 @@ class BatteryRecorderService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_ENABLE_SHIZUKU) {
-            bindPrivilegedTelemetry()
+            try {
+                startAsForeground()
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, true).apply()
+                acquireSamplingWakeLock()
+                bindPrivilegedTelemetry()
+                handler.removeCallbacks(sampler)
+                handler.post(sampler)
+            } catch (t: Throwable) {
+                event("SHIZUKU_ENABLE_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
+            }
             return START_STICKY
         }
         if (intent?.action == ACTION_STOP) {
@@ -560,7 +569,7 @@ class RecorderDatabase(context: Context) :
                 appendLine("Foreground app time + coincident discharge (approx.):")
                 if (s.apps.isEmpty()) appendLine("  unavailable / Usage Access not granted / not yet recorded")
                 else s.apps.take(8).forEach { app ->
-                    appendLine("  " + app.name + ": " + app.minutes + " min • " + app.drainPct + " percentage points lost during its foreground intervals")
+                    appendLine("  " + app.name + ": " + app.minutes + " min foreground • +" + app.chargePct + "% during charging • -" + app.drainPct + "% during discharging")
                 }
             }
             appendLine()
@@ -587,8 +596,9 @@ class RecorderDatabase(context: Context) :
         val time: Long, val pct: Int?, val state: String, val plug: String,
         val chargeCounter: Long?, val screen: Boolean, val app: String
     )
-    private data class AppMetric(val name: String, val ms: Long, val drain: Double) {
+    private data class AppMetric(val name: String, val ms: Long, val charge: Double, val drain: Double) {
         val minutes: Long get() = ms / 60_000L
+        val chargePct: String get() = String.format(Locale.US, "%.1f", charge)
         val drainPct: String get() = String.format(Locale.US, "%.1f", drain)
     }
     private data class Bucket(var ms: Long = 0L, var pct: Double = 0.0, var chargeCounterUah: Long = 0L)
@@ -633,6 +643,7 @@ class RecorderDatabase(context: Context) :
         val chargeOn = Bucket(); val chargeOff = Bucket()
         val drainOn = Bucket(); val drainOff = Bucket()
         val appTime = linkedMapOf<String, Long>()
+        val appCharge = linkedMapOf<String, Double>()
         val appDrain = linkedMapOf<String, Double>()
         var screenOn = 0; var screenOff = 0
         rows.forEach { if (it.screen) screenOn++ else screenOff++ }
@@ -648,6 +659,8 @@ class RecorderDatabase(context: Context) :
             if (charging(before) && charging(after) && delta >= 0.0) {
                 add(charge, dt, delta, counterDelta.coerceAtLeast(0L))
                 add(if (after.screen) chargeOn else chargeOff, dt, delta, counterDelta.coerceAtLeast(0L))
+                if (after.screen && after.app.isNotBlank() && after.app == before.app)
+                    appCharge[after.app] = (appCharge[after.app] ?: 0.0) + delta
             } else if (discharging(before) && discharging(after) && delta <= 0.0) {
                 add(drain, dt, -delta, (-counterDelta).coerceAtLeast(0L))
                 add(if (after.screen) drainOn else drainOff, dt, -delta, (-counterDelta).coerceAtLeast(0L))
@@ -665,7 +678,7 @@ class RecorderDatabase(context: Context) :
             hr(chargeOn), fmt(chargeOn.pct), rate(chargeOn), hr(chargeOff), fmt(chargeOff.pct), rate(chargeOff),
             hr(drainOn), fmt(drainOn.pct), rate(drainOn), hr(drainOff), fmt(drainOff.pct), rate(drainOff),
             screenOn, screenOff,
-            appTime.entries.sortedByDescending { it.value }.map { AppMetric(it.key, it.value, appDrain[it.key] ?: 0.0) }
+            appTime.entries.sortedByDescending { it.value }.map { AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0) }
         )
     }
 
