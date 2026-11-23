@@ -1,4 +1,4 @@
-# BatteryScope 1.14 — Measurement and implementation audit
+# BatteryScope 1.15 — Measurement and implementation audit
 
 Audit date: 2026-11-23  
 Branch: `batteryscope`  
@@ -68,7 +68,7 @@ JVM tests cover estimator arithmetic and invalid-session rejection. CI compilati
 
 A dedicated GitHub Actions workflow now targets the `batteryscope` branch and Android project paths. It installs Java 17, Android SDK 35 and Gradle 8.9; runs `:app:testDebugUnitTest`; assembles the debug APK; verifies package ID and versionCode; calculates SHA-256, verifies the APK signature and prints the signing-certificate digest; and uploads the APK and test report. Workflow success and artifact integrity must be checked against the exact source commit before release.
 
-A duplicate `MainActivity.onDestroy()` override discovered in source review was removed. This was a Kotlin compile blocker. Source version remains 1.14 / versionCode 15; the hardening changes do not alter SQLite schema or application identity.
+A duplicate `MainActivity.onDestroy()` override discovered in source review was removed. This was a Kotlin compile blocker. Source version is now 1.15 / versionCode 16. Package identity and SQLite schema v4 remain unchanged.
 
 
 ## Device-wide API capability audit — 2026-11-23
@@ -89,3 +89,4 @@ A user-provided CSV contained 22 samples and 51 events over 13m35.654s. SOC 83�
 The exported `battery_voltage_mv` values were 3 or 4, not values in the expected millivolt range. Source inspection confirms MainActivity only accepts 2,500–5,000 for battery voltage and therefore suppresses the battery-side watt calculation for these readings. The `battery_current_ua` values were 14–674 (mean 201.9; median 132), while the UI divides by 1,000 to display mA. The charge-counter endpoint delta corresponds to about 595.8 mA average over the full interval, but the counter is visibly quantized in 45,000 µAh steps. This points to unresolved OEM/API scaling and/or fuel-gauge quantization; it does not establish a safe conversion. Raw units must remain unchanged until independently validated.
 
 Average current, energy counter, cycle count, charger max-current/max-voltage and USB V/I candidates were null in every sample. Usage Access was disabled for 20/22 samples. There were 21 intervals: mean 38.84s and one 154.741s gap. Kernel tree capture yielded no fields because roots were denied or absent/hidden. This dataset validates persistence/export only; it does not validate measurement semantics, charger input watts or continuous background reliability.
+\n\n## 2026-11-23 — Forensic audit and measurement-quality correction\n\nThe complete source/APK review, CSV evidence, integrity metadata, confirmed defects, corrective changes and verification boundaries are recorded in [FORENSIC_AUDIT_2026-11-23.md](FORENSIC_AUDIT_2026-11-23.md). The extended RMX2161 CSV shows a current-polarity conflict with Android's BatteryManager contract and raw voltage values 3–4 in the mV field. Version 1.15 adds explicit polarity/range validation, suppresses battery-side watts when either input is invalid, preserves raw readings, logs quality transitions, simplifies the main battery panel and preserves source UsageStats event timestamps. Eight new JVM tests cover the quality guard.\n\nThe v1.14 APK artifact is independently checksum-matched to its workflow artifact and ZIP integrity-checked; its signature verification is recorded by CI. Version 1.15 still requires its own workflow build and physical RMX2161 validation. This correction does not establish charger-input watts or complete the device-wide collector roadmap.\n
