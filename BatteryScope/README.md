@@ -1,6 +1,8 @@
 # BatteryScope 1.14 — Realme Narzo 20 Pro (RMX2161)
 
-BatteryScope is a standalone Android battery and charging telemetry app. It uses standard Android framework APIs and best-effort read-only access from its ordinary app process. It does not require Shizuku, root, ADB setup or a companion app.
+BatteryScope is evolving into a local-first Android device telemetry and history system. The current implementation records battery/charging data and selected app-use correlations; the broader device-wide collectors are being designed and implemented in phases. It uses standard Android framework APIs and best-effort read-only access from its ordinary app process. It does not require Shizuku, root, ADB setup or a companion app.
+
+The device-wide capability matrix, lifecycle design and implementation gates are documented in [DEVICE_TELEMETRY_ARCHITECTURE.md](DEVICE_TELEMETRY_ARCHITECTURE.md).
 
 Application ID: `com.batteryscope`  
 Version: 1.14 (versionCode 15)  
@@ -34,7 +36,7 @@ Keep the recorder enabled during ordinary use and charging to collect enough ses
 
 ## Continuous local recorder
 
-Start **Start all-day recorder** in the app. A foreground service samples:
+The foreground recorder starts automatically when the app is opened and resumes after boot or app replacement when Android permits. No Start or Stop button is required. It samples:
 - Android BatteryManager telemetry every 30 seconds.
 - Read-only ordinary-app-visible power-supply, Type-C, USB-PD, USB-role, thermal, hwmon and non-serial USB descriptor inventory every 120 seconds.
 - Power connection, battery state, screen on/off and battery-low transitions.
@@ -42,7 +44,7 @@ Start **Start all-day recorder** in the app. A foreground service samples:
 
 The recorder stores raw samples and events in a local SQLite database. History views include 24-hour, 7-day, 30-day, 90-day, 365-day and all-time summaries; charging/discharging percentage rates and charge-counter-derived mA rates; screen-on/off comparisons; plugged-in battery decline; app foreground-time correlation with coincident SOC and, when valid, charge-counter mAh movement (same foreground package at both sample endpoints while the display is on); session start/end and threshold times; recent session history with separate display-on/display-off SOC and battery-side current rates; and sampling-gap diagnostics. The app estimates time to 100% and 0% using both historical screen-on/screen-off rates and the current session's own screen-state rates. These forecasts are approximate and are labelled as historical estimates. Foreground-app battery decline and charge-counter movement are temporal correlation, not direct per-app current or energy measurement or proof of causation.
 
-The recorder has two selectable modes. **Continuous** (default) holds a partial CPU wake lock to improve screen-off 30-second sampling continuity; this increases BatteryScope's own power use and can bias discharge measurements. **Low-impact** releases the permanent wake lock; Android may suspend the process and create screen-off sampling gaps, which history reports. Toggle the mode in the app and keep the same mode when comparing runs. The ongoing notification identifies the selected mode. Stop recording to release the wake lock. Recording is best-effort and can be interrupted by force-stop, powered-off time, Android/Realme restrictions or service failure. Boot resume is attempted only when the user previously left recording enabled.
+The recorder has two selectable sampling modes. **Continuous** (default) holds a partial CPU wake lock to improve screen-off 30-second sampling continuity; this increases BatteryScope's own power use and can bias discharge measurements. **Low-impact** releases the permanent wake lock; Android may suspend the process and create screen-off sampling gaps, which history reports. Toggle the mode in the app and keep the same mode when comparing runs. The ongoing notification identifies the selected mode. Monitoring itself starts automatically and has no in-app Stop control. Recording remains best-effort: force-stop, powered-off time, Android/Realme restrictions or service failure can interrupt it. Boot and app-replacement resume are attempted automatically, but uninterrupted execution is not guaranteed.
 
 ## Export and storage
 
@@ -52,11 +54,13 @@ Raw SQLite history has no automatic retention cap; storage use grows with record
 
 ## Permissions and setup
 
-1. Install BatteryScope.
-2. Start the recorder and allow notification visibility if Android asks.
-3. Grant Usage Access only if foreground-app tracking is wanted.
-4. Review Android/Realme battery-management settings if background recording is interrupted.
-5. Stop the recorder when collection is complete.
+1. Install and open BatteryScope; monitoring starts automatically.
+2. Allow notification visibility if Android asks (Android 13+).
+3. Grant Usage Access only if app usage/network/storage history is wanted.
+4. Review Android/Realme battery-management settings if diagnostics report background restrictions.
+5. Use the export control whenever you need a copy of local history.
+
+Android may prevent automatic recovery after a force-stop. A foreground service and wake lock improve sampling continuity but cannot override every OEM or OS restriction.
 
 No Shizuku app, root, ADB setup or companion service is required.
 
