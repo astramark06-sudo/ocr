@@ -436,7 +436,7 @@ class MainActivity : Activity() {
             technology = technology,
             maxChargingCurrentUa = intent?.getIntExtra("max_charging_current", -1)?.takeIf { it > 0 },
             maxChargingVoltageUv = intent?.getIntExtra("max_charging_voltage", -1)?.takeIf { it > 0 },
-            batteryPresent = intent?.extras?.getBoolean("present"),
+            batteryPresent = intent?.extras?.let { if (it.containsKey("present")) it.getBoolean("present") else null },
             cycleCount = intent?.getIntExtra("cycle_count", -1)?.takeIf { it >= 0 },
             supplies = supplies,
             supplyRootReadable = readable
