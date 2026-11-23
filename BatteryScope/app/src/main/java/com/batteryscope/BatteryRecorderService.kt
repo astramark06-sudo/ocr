@@ -42,7 +42,7 @@ class BatteryRecorderService : Service() {
     private lateinit var worker: HandlerThread
     private lateinit var db: RecorderDatabase
     private lateinit var batteryManager: BatteryManager
-    private var batteryIntent: Intent? = null
+    @Volatile private var batteryIntent: Intent? = null
     private var lastUsageQueryMs = 0L
     private var foregroundPackage: String? = null
     private var lastSampleState: String? = null
@@ -356,7 +356,11 @@ class BatteryRecorderService : Service() {
     } catch (_: Throwable) { false }
 
     private fun updateForegroundPackage(now: Long): String? {
-        if (!hasUsageAccess()) return null
+        if (!hasUsageAccess()) {
+            if (foregroundPackage != null) event("USAGE_ACCESS_REVOKED", "Usage Access unavailable; clearing previous foreground app attribution")
+            foregroundPackage = null
+            return null
+        }
         val manager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
         val from = if (lastUsageQueryMs > 0L) lastUsageQueryMs else now - 60_000L
         return try {
@@ -735,6 +739,15 @@ class RecorderDatabase(context: Context) :
         return if (monotonicDelta > 0L) monotonicDelta else after.time - before.time
     }
 
+    private fun observedDurationMs(rows: List<Row>): Long {
+        var total = 0L
+        for (i in 1 until rows.size) {
+            val interval = sampleIntervalMs(rows[i - 1], rows[i])
+            if (interval > 0L) total += interval
+        }
+        return total
+    }
+
     private fun charging(row: Row) = row.state == "CHARGING"
     private fun discharging(row: Row) = row.state == "DISCHARGING"
 
@@ -872,7 +885,7 @@ class RecorderDatabase(context: Context) :
             if (run.size < 2 || first.pct == null || last.pct == null) {
                 start + " • one sample only; elapsed time and rate unavailable"
             } else {
-                val elapsed = sampleIntervalMs(first, last).coerceAtLeast(0L)
+                val elapsed = observedDurationMs(run).coerceAtLeast(0L)
                 val delta = last.pct - first.pct
                 val rate = if (elapsed > 0L) kotlin.math.abs(delta.toDouble()) / (elapsed / 3_600_000.0) else 0.0
                 val onMs = run.zipWithNext().sumOf { (a, b) ->
@@ -946,7 +959,7 @@ class RecorderDatabase(context: Context) :
             val status = when {
                 (wantCharge && initial >= threshold) || (!wantCharge && initial <= threshold) -> "already at threshold at session start"
                 !directionMatches -> if (wantCharge) "not projected: battery level did not increase during this charging-state segment" else "not projected: battery level did not decrease during this discharging-state segment"
-                crossing != null -> durationText(crossing - first.elapsed) + " observed"
+                crossing != null -> durationText(crossing) + " observed"
                 rate > 0.0 && ((wantCharge && current < threshold) || (!wantCharge && current > threshold)) ->
                     durationText(((kotlin.math.abs(threshold - current).toDouble() / rate) * 3_600_000.0).toLong()) + " estimated from current session average"
                 else -> "not reached / insufficient data"
@@ -957,12 +970,15 @@ class RecorderDatabase(context: Context) :
         return out.toString().trim()
     }
 
+    /** Returns elapsed duration from the first row, not an absolute wall/boot timestamp. */
     private fun thresholdTime(rows: List<Row>, threshold: Int, upward: Boolean): Long? {
+        var elapsedFromStart = 0L
         for (i in 1 until rows.size) {
+            elapsedFromStart += sampleIntervalMs(rows[i - 1], rows[i]).coerceAtLeast(0L)
             val before = rows[i - 1].pct ?: continue
             val after = rows[i].pct ?: continue
-            if (upward && before < threshold && after >= threshold) return rows[i].elapsed
-            if (!upward && before > threshold && after <= threshold) return rows[i].elapsed
+            if (upward && before < threshold && after >= threshold) return elapsedFromStart
+            if (!upward && before > threshold && after <= threshold) return elapsedFromStart
         }
         return null
     }
