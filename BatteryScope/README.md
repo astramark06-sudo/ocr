@@ -1,9 +1,9 @@
-# BatteryScope 1.11 — Realme Narzo 20 Pro (RMX2161)
+# BatteryScope 1.12 — Realme Narzo 20 Pro (RMX2161)
 
 BatteryScope is an evidence-first Android battery and charging-path diagnostic application. It collects Android framework battery data, read-only kernel power-supply and USB class attributes, optional Shizuku shell-UID diagnostics, and long-running local telemetry history.
 
 Application ID: com.batteryscope  
-Version: 1.11 (versionCode 12)  
+Version: 1.12 (versionCode 13)  
 Target handset: Realme Narzo 20 Pro RMX2161, Android 12, non-rooted  
 Build toolchain: Java 17, Gradle 8.9, Android SDK 35
 
