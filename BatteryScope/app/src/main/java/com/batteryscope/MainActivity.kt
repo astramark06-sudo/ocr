@@ -38,8 +38,6 @@ class MainActivity : Activity() {
     private var historyUpdatedAtMs = 0L
     private var historyLoadInFlight = false
     private var exportInFlight = false
-    private lateinit var startButton: Button
-    private lateinit var stopButton: Button
     private lateinit var samplingModeButton: Button
     private var cachedSupplyNodes: Map<String, String> = emptyMap()
     private var cachedSupplyRootVisible = false
@@ -114,7 +112,7 @@ class MainActivity : Activity() {
         super.onResume()
         handler.removeCallbacks(sampler)
         handler.post(sampler)
-        updateRecorderControls()
+        ensureRecorderRunning()
         refreshHistoryDisplay(true)
     }
 
@@ -164,7 +162,7 @@ class MainActivity : Activity() {
         chargerText = addPanel(content, "02  POWER SUPPLY NODES  •  KERNEL")
         diagnosticText = addPanel(content, "03  ACCESS, SOURCE & DATA QUALITY")
         historyText = addPanel(content, "04  CHARGE / DISCHARGE HISTORY & APP USAGE")
-        historyText.text = "No recorder history yet. Start the all-day recorder to build daily, weekly and monthly data."
+        historyText.text = "Recorder starts automatically. Local history accumulates across days, weeks and months."
         capacityText = addPanel(content, "05  BATTERY HEALTH & FULL-CHARGE CAPACITY")
         capacityText.text = "Capacity estimate not available yet. Record several charging/discharging sessions with the recorder enabled."
 
@@ -174,27 +172,11 @@ class MainActivity : Activity() {
         }
         content.addView(note)
 
-        val buttons = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
         val refreshButton = Button(this).apply {
             text = "Refresh"
             setOnClickListener { refreshReadings() }
         }
-        startButton = Button(this).apply {
-            text = "Start all-day recorder"
-            setOnClickListener { startLogging() }
-        }
-        stopButton = Button(this).apply {
-            text = "Stop recorder"
-            isEnabled = false
-            setOnClickListener { stopLogging() }
-        }
-        buttons.addView(refreshButton, LinearLayout.LayoutParams(0, -2, 0.8f))
-        buttons.addView(startButton, LinearLayout.LayoutParams(0, -2, 1f))
-        buttons.addView(stopButton, LinearLayout.LayoutParams(0, -2, 1f))
-        content.addView(buttons)
+        content.addView(refreshButton, LinearLayout.LayoutParams(-1, -2))
 
         val historyButtons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -673,41 +655,31 @@ class MainActivity : Activity() {
 
     private fun csvEscape(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
 
-    private fun startLogging() {
+    /** Monitoring is automatic: every foreground app launch repairs a missing recorder request. */
+    private fun ensureRecorderRunning() {
         try {
-            val intent = Intent(this, BatteryRecorderService::class.java).setAction(BatteryRecorderService.ACTION_START)
+            val intent = Intent(this, BatteryRecorderService::class.java)
+                .setAction(BatteryRecorderService.ACTION_START)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
-            startButton.isEnabled = false
-            stopButton.isEnabled = true
-            statusText.text = "Starting persistent recorder. Target: 30-second samples; screen-off continuity depends on the selected CPU wake-lock mode."
-            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            statusText.text = "Automatic device monitoring requested • local recording • boot resume enabled"
+            if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), NOTIFICATION_REQUEST_CODE)
             }
-            handler.postDelayed({ updateRecorderControls(); refreshHistoryDisplay(true) }, 1200L)
+            handler.postDelayed({
+                val active = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
+                    .getBoolean(BatteryRecorderService.KEY_ACTIVE, false)
+                statusText.text = if (active) {
+                    "Automatic monitoring active • 30-second battery samples • local history database"
+                } else {
+                    "Monitoring startup is not confirmed. Check diagnostics and Android/Realme background restrictions."
+                }
+                refreshHistoryDisplay(true)
+            }, 1200L)
         } catch (t: Throwable) {
-            statusText.text = "RECORDER START FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
-            updateRecorderControls()
+            statusText.text = "AUTOMATIC MONITOR START FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
         }
-    }
-
-    private fun stopLogging() {
-        try {
-            startService(Intent(this, BatteryRecorderService::class.java).setAction(BatteryRecorderService.ACTION_STOP))
-            statusText.text = "Recorder stop requested. Previously collected history remains stored."
-        } catch (t: Throwable) {
-            statusText.text = "RECORDER STOP FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
-        }
-        handler.postDelayed({ updateRecorderControls(); refreshHistoryDisplay(true) }, 800L)
-    }
-
-    private fun updateRecorderControls() {
-        if (!::startButton.isInitialized || !::stopButton.isInitialized) return
-        val active = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
-            .getBoolean(BatteryRecorderService.KEY_ACTIVE, false)
-        startButton.isEnabled = !active
-        stopButton.isEnabled = active
         updateSamplingModeButton()
-        if (active) statusText.text = "All-day recorder active • 30-second target samples • local history database"
     }
 
     private fun toggleSamplingMode() {
