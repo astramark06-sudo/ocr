@@ -26,7 +26,7 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var chart: BatteryHistoryChart
     private val values = mutableMapOf<String, TextView>()
-    private var previous: BatterySnapshot? = null
+    private var previousTrendSample: BatterySnapshot? = null
     private var percentRatePerHour: Double? = null
     private var lastSavedAt = 0L
     private val ticker = object : Runnable {
@@ -90,12 +90,18 @@ class MainActivity : Activity() {
     }
     private fun refresh() {
         val s = reader.read() ?: return
-        val old = previous
-        if (old != null && s.timestamp > old.timestamp && s.percent != old.percent) {
-            val hours = (s.timestamp - old.timestamp) / 3_600_000.0
-            if (hours > 0) percentRatePerHour = abs(s.percent - old.percent) / hours
+        val old = previousTrendSample
+        // SOC is integer-valued on many phones. Compare samples at least five minutes apart
+        // to avoid wildly overstated forecasts from a one-percent step over a few seconds.
+        if (old == null) {
+            previousTrendSample = s
+        } else if (s.timestamp - old.timestamp >= 5L * 60 * 1000) {
+            if (s.isCharging == old.isCharging && s.percent != old.percent) {
+                val hours = (s.timestamp - old.timestamp) / 3_600_000.0
+                if (hours > 0) percentRatePerHour = abs(s.percent - old.percent) / hours
+            }
+            previousTrendSample = s
         }
-        previous = s
         if (s.timestamp - lastSavedAt >= 60_000L || lastSavedAt == 0L) { history.add(s); lastSavedAt = s.timestamp }
         values["percent"]?.text = "${s.percent}%"
         values["status"]?.text = when { s.isFull -> "FULL"; s.isCharging -> "CHARGING"; s.isPlugged -> "CONNECTED"; else -> "DISCHARGING" }
