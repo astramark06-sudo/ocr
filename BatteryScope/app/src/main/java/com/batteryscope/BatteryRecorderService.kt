@@ -42,6 +42,7 @@ class BatteryRecorderService : Service() {
     private var lastSysfsReadMs = 0L
     private var lastSysfsJson = JSONObject()
     private var receiverRegistered = false
+    private var samplingWakeLock: PowerManager.WakeLock? = null
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -85,8 +86,9 @@ class BatteryRecorderService : Service() {
         try {
             startAsForeground()
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, true).apply()
+            acquireSamplingWakeLock()
             event(if (intent == null) "RECORDER_RESTARTED" else "RECORDER_STARTED",
-                "User-visible foreground recorder; sample interval " + SAMPLE_INTERVAL_MS + " ms")
+                "Foreground recorder; 30-second sampling; CPU partial wake lock held while recording (adds app power use)")
             handler.removeCallbacks(sampler)
             handler.post(sampler)
         } catch (t: Throwable) {
@@ -101,7 +103,7 @@ class BatteryRecorderService : Service() {
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("BatteryScope is recording")
-            .setContentText("Battery, charger, charging, discharging and app-usage telemetry")
+            .setContentText("Telemetry active • CPU kept awake for 30-second sampling; increases app drain")
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
             .build()
@@ -109,6 +111,29 @@ class BatteryRecorderService : Service() {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun acquireSamplingWakeLock() {
+        try {
+            val power = getSystemService(POWER_SERVICE) as PowerManager
+            val lock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BatteryScope::ContinuousRecorder")
+            lock.setReferenceCounted(false)
+            if (!lock.isHeld) lock.acquire()
+            samplingWakeLock = lock
+        } catch (t: Throwable) {
+            event("WAKE_LOCK_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
+        }
+    }
+
+    private fun releaseSamplingWakeLock() {
+        try {
+            val lock = samplingWakeLock
+            if (lock != null && lock.isHeld) lock.release()
+        } catch (t: Throwable) {
+            event("WAKE_LOCK_RELEASE_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
+        } finally {
+            samplingWakeLock = null
         }
     }
 
@@ -342,6 +367,7 @@ class BatteryRecorderService : Service() {
 
     private fun stopRecorder() {
         handler.removeCallbacks(sampler)
+        releaseSamplingWakeLock()
         event("RECORDER_STOPPED", "Stopped by user")
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
         if (receiverRegistered) {
@@ -361,6 +387,7 @@ class BatteryRecorderService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(sampler)
+        releaseSamplingWakeLock()
         if (receiverRegistered) try { unregisterReceiver(receiver) } catch (_: Throwable) { }
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
         try { db.close() } catch (_: Throwable) { }
