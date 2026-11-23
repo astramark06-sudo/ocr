@@ -410,7 +410,7 @@ class BatteryRecorderService : Service() {
         )
         val skip = setOf("device", "subsystem", "driver", "power", "firmware_node", "of_node")
         var count = 0
-        val maxFields = 900
+        val maxFields = MAX_SYSFS_FIELDS
         for ((rootPath, maxDepth) in roots) {
             val root = java.io.File(rootPath)
             val prefix = root.name
@@ -559,7 +559,7 @@ class BatteryRecorderService : Service() {
         private const val FULL_AUDIT_INTERVAL_MS = 15L * 60 * 1000
         private const val MAX_AUDIT_CHARS = 20_000
         private const val SYSFS_INTERVAL_MS = 120_000L
-        private const val MAX_SYSFS_FIELDS = 180
+        private const val MAX_SYSFS_FIELDS = 900
         private const val CHANNEL_ID = "batteryscope_recorder"
         private const val NOTIFICATION_ID = 301
     }
