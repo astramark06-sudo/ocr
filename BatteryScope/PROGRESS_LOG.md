@@ -142,3 +142,10 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Added a shared pure `BatteryPercentMath` helper that rejects missing scale, non-positive scale, negative level and level greater than scale instead of inventing a percentage.
 - Added JVM tests for normal, full, empty, missing and out-of-range values.
 - No schema change; invalid/missing percentage remains null in SQLite and CSV.
+
+
+## 2026-11-23 — Exact battery percentage metadata status
+
+- The dashboard now identifies the exact percentage-input failure: ACTION_BATTERY_CHANGED unavailable, EXTRA_LEVEL missing, EXTRA_SCALE missing, invalid level, non-positive scale or level greater than scale.
+- The recorder writes an event only when this metadata status changes, preserving the reason in exported event history without producing a row every sample.
+- A null/invalid level-scale pair remains null; no assumed 100-point scale is used.
