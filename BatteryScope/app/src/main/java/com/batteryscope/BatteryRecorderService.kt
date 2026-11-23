@@ -594,6 +594,7 @@ class RecorderDatabase(context: Context) :
                 val s = summarise(rows)
                 appendLine()
                 appendLine("=== " + label + " • " + s.count + " samples ===")
+                appendLine("Sampling continuity: " + gapReport(rows))
                 appendLine("Charging: " + s.chargeHours + " h • +" + s.chargedPct + " percentage points • " + s.chargeRate + " %/h")
                 appendLine("Discharging: " + s.dischargeHours + " h • -" + s.dischargedPct + " percentage points • " + s.dischargeRate + " %/h")
                 appendLine("Charge-counter gain/loss: +" + s.chargeGainMah + " / -" + s.chargeLossMah + " mAh (Android estimate)")
@@ -665,6 +666,29 @@ class RecorderDatabase(context: Context) :
     }
 
     // BatteryManager status is primary; plug state can lag a connection transition.
+    private fun gapReport(rows: List<Row>): String {
+        var gaps = 0
+        var missingMs = 0L
+        var longestMs = 0L
+        var intervals = 0L
+        var intervalTotal = 0L
+        for (i in 1 until rows.size) {
+            val dt = rows[i].time - rows[i - 1].time
+            if (dt <= 0L) continue
+            intervals++
+            intervalTotal += dt
+            if (dt > SAMPLE_INTERVAL_MS * 3) {
+                gaps++
+                missingMs += (dt - SAMPLE_INTERVAL_MS).coerceAtLeast(0L)
+                if (dt > longestMs) longestMs = dt
+            }
+        }
+        val average = if (intervals > 0) (intervalTotal / intervals).toString() + " ms" else "n/a"
+        return gaps.toString() + " gaps >90s • uncovered estimate " + durationText(missingMs) +
+            " • longest gap " + durationText(longestMs) + " • average interval " + average +
+            " (gap cause cannot be inferred from timestamps alone)"
+    }
+
     private fun charging(row: Row) = row.state == "CHARGING"
     private fun discharging(row: Row) = row.state == "DISCHARGING"
 
