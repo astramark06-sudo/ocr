@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var historyText: TextView
     private var historyUpdatedAtMs = 0L
     private var historyLoadInFlight = false
+    private var exportInFlight = false
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private val coolDownButtons = mutableListOf<Button>()
@@ -1101,24 +1102,40 @@ class MainActivity : Activity() {
     }
 
     private fun exportRecorderHistory() {
-        var database: RecorderDatabase? = null
-        try {
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val directory = File(getExternalFilesDir(null) ?: filesDir, "exports")
-            if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Could not create private export directory")
-            val file = File(directory, "BatteryScope_History_" + timestamp + ".csv")
-            database = RecorderDatabase(this)
-            file.bufferedWriter(Charsets.UTF_8).use { database!!.exportCsv(it) }
-            if (file.length() == 0L) {
-                statusText.text = "No telemetry history exists to export yet."
-                return
-            }
-            launchCsvExport(file)
-        } catch (t: Throwable) {
-            statusText.text = "HISTORY EXPORT FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
-        } finally {
-            try { database?.close() } catch (_: Throwable) { }
+        if (exportInFlight) {
+            statusText.text = "A history export is already in progress."
+            return
         }
+        exportInFlight = true
+        statusText.text = "Preparing CSV history in the background…"
+        Thread {
+            var database: RecorderDatabase? = null
+            var file: File? = null
+            var failure: String? = null
+            var noData = false
+            try {
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val directory = File(getExternalFilesDir(null) ?: filesDir, "exports")
+                if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Could not create private export directory")
+                file = File(directory, "BatteryScope_History_" + timestamp + ".csv")
+                database = RecorderDatabase(applicationContext)
+                file.bufferedWriter(Charsets.UTF_8).use { database!!.exportCsv(it) }
+                noData = file.length() == 0L
+            } catch (t: Throwable) {
+                failure = t.javaClass.simpleName + ": " + (t.message ?: "unknown")
+            } finally {
+                try { database?.close() } catch (_: Throwable) { }
+            }
+            runOnUiThread {
+                exportInFlight = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                when {
+                    failure != null -> statusText.text = "HISTORY EXPORT FAILED: " + failure
+                    noData -> statusText.text = "No telemetry history exists to export yet."
+                    file != null -> launchCsvExport(file!!)
+                }
+            }
+        }.start()
     }
 
     @Suppress("DEPRECATION")
@@ -1152,15 +1169,33 @@ class MainActivity : Activity() {
             return
         }
         val destination: Uri = data.data!!
-        try {
-            if (source == null || !source.isFile) throw IllegalStateException("CSV source file is missing")
-            val output = contentResolver.openOutputStream(destination, "w")
-                ?: throw IllegalStateException("Android could not open the selected destination")
-            output.use { stream -> source.inputStream().use { input -> input.copyTo(stream) } }
-            statusText.text = "CSV exported successfully: ${source.name}"
-        } catch (t: Throwable) {
-            statusText.text = "CSV export failed: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}. Internal copy retained."
+        if (source == null || !source.isFile) {
+            statusText.text = "CSV export failed: source file is missing. Internal history remains stored."
+            return
         }
+        if (exportInFlight) return
+        exportInFlight = true
+        statusText.text = "Copying CSV to the selected destination in the background…"
+        val resolver = contentResolver
+        Thread {
+            var failure: String? = null
+            try {
+                val output = resolver.openOutputStream(destination, "w")
+                    ?: throw IllegalStateException("Android could not open the selected destination")
+                output.use { stream -> source.inputStream().use { input -> input.copyTo(stream) } }
+            } catch (t: Throwable) {
+                failure = t.javaClass.simpleName + ": " + (t.message ?: "unknown")
+            }
+            runOnUiThread {
+                exportInFlight = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                statusText.text = if (failure == null) {
+                    "CSV exported successfully: ${source.name}"
+                } else {
+                    "CSV export failed: ${failure}. Internal copy retained."
+                }
+            }
+        }.start()
     }
 
     override fun onDestroy() {
