@@ -1117,10 +1117,11 @@ class MainActivity : Activity() {
                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
                 val directory = File(getExternalFilesDir(null) ?: filesDir, "exports")
                 if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Could not create private export directory")
-                file = File(directory, "BatteryScope_History_" + timestamp + ".csv")
+                val exportFile = File(directory, "BatteryScope_History_" + timestamp + ".csv")
+                file = exportFile
                 database = RecorderDatabase(applicationContext)
-                file.bufferedWriter(Charsets.UTF_8).use { database!!.exportCsv(it) }
-                noData = file.length() == 0L
+                exportFile.bufferedWriter(Charsets.UTF_8).use { database!!.exportCsv(it) }
+                noData = exportFile.length() == 0L
             } catch (t: Throwable) {
                 failure = t.javaClass.simpleName + ": " + (t.message ?: "unknown")
             } finally {
