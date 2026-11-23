@@ -42,3 +42,6 @@ Next:
 - Audit background service, database migrations, CSV alignment, performance and app usage analytics.
 - Add tests for statistics and migration/export invariants.
 - Keep each logical milestone committed and update this log/handoff.
+
+
+Checkpoint marker: workflow-triggering commit created after 1.14 source milestone.
