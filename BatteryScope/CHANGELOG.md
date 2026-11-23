@@ -37,3 +37,15 @@ All versions are debug APK development builds unless a signed release is explici
 ## Release notes
 - This changelog records the verified source changes represented by the repository history; it does not imply that every version was installed or device-tested.
 - Consult `AUDIT.md` for measurement provenance, safety guards and known limitations.
+
+
+## 1.10 — persistent telemetry recorder (development milestone)
+- Added a user-started foreground service so sampling is no longer tied to MainActivity visibility.
+- Samples Android battery status, percentage, voltage, temperature, current, average current, charge counter, energy counter, health, plug type and technology every 30 seconds.
+- Captures readable power-supply sysfs attributes on a slower two-minute interval; preserves raw values and does not label vendor states or configured limits as measured input power.
+- Records power connection/disconnection, screen on/off, battery-low and foreground-app transition events.
+- Added optional Android Usage Access tracking for the foreground package, screen state and sampled foreground duration.
+- Added local SQLite raw history, 24-hour/7-day/30-day summary windows and full-history CSV export.
+- Recorder is user-started and displays an ongoing notification. START_STICKY supports service recreation, but force-stop, power-off, OEM process restrictions and denied permissions can still interrupt recording.
+- App-level drain is not measured electrically; foreground-app intervals are correlation data only.
+- Version code: 11.
