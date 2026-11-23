@@ -28,7 +28,7 @@ class RecorderTimeMathTest {
         ))
         assertEquals(900_000L, RecorderTimeMath.intervalMs(
             1_000_000L, 120_000L, null,
-            1_900_000L, 1_020_000L, null
+            2_500_000L, 1_020_000L, null
         ))
     }
 }
