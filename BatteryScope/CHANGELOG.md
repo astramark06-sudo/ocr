@@ -1,5 +1,15 @@
 # BatteryScope changelog
 
+## 1.14 — expanded telemetry, diagnostics and non-blocking live dashboard
+- Moved live BatteryManager and kernel class-tree reads to a dedicated HandlerThread; dashboard refresh no longer traverses sysfs on the UI thread.
+- Added best-effort charger-advertised maximum charging current/voltage, battery-present state and optional cycle-count metadata to live telemetry and SQLite schema v3, with non-destructive v2 migration.
+- Added explicit diagnostics for unavailable BatteryManager properties, Usage Access, per-kernel-root visibility and read/list failures; root paths hidden by SELinux are not falsely reported as definitely absent.
+- Expanded history with charge-counter-derived mA charge/discharge rates, screen-on/off rate comparisons and historical time-to-full/time-to-empty projections.
+- Extended CSV export with the additional battery/charger fields.
+- Preserved the 30-second recorder cadence and 120-second hardware-tree inventory cadence.
+- Version code: 15.
+
+
 ## 1.13 — standalone battery capacity estimation
 - Added a Battery Health panel estimating full-charge capacity from Android charge-counter movement relative to state-of-charge changes across continuous sessions.
 - Uses up to 90 days of history, a 12-percentage-point minimum session change, same-boot continuity, direction checks, median aggregation, session spread and qualitative confidence.
