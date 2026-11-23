@@ -14,9 +14,9 @@ class RecorderTimeMathTest {
 
     @Test
     fun rebootUsesWallTimeEvenWhenNewUptimeIsLarger() {
-        assertEquals(900_000L, RecorderTimeMath.intervalMs(
+        assertEquals(1_500_000L, RecorderTimeMath.intervalMs(
             1_000_000L, 120_000L, 7,
-            1_900_000L, 1_020_000L, 8
+            2_500_000L, 1_020_000L, 8
         ))
     }
 
@@ -26,7 +26,7 @@ class RecorderTimeMathTest {
             1_000_000L, 500_000L, null,
             1_030_000L, 530_000L, null
         ))
-        assertEquals(900_000L, RecorderTimeMath.intervalMs(
+        assertEquals(1_500_000L, RecorderTimeMath.intervalMs(
             1_000_000L, 120_000L, null,
             2_500_000L, 1_020_000L, null
         ))
