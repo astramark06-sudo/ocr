@@ -83,3 +83,8 @@ Newly identified Android data sources for later implementation:
 - BatteryStats per-UID energy and full system battery history remain privileged; no ordinary-app workaround is assumed.
 
 The RMX2161's exact kernel exports, UsageStats/NetworkStats query behavior, SuperDart input telemetry, sensor inventory and Realme background policy remain unverified until an on-device capability report is collected. No new device-wide collector is marked implemented merely because its API has been identified.
+
+
+## Latest Android CI checkpoint — 2026-11-23
+
+The dedicated Android build on commit `81286c706390d6c60d94a60428c8b298fa0651d2` failed during Kotlin compilation, not SDK setup. The exact compiler diagnostic was an unterminated string / incorrect template entry at `MainActivity.kt:407:204`. The offending bounded-kernel-scan warning string is fixed in commit `8463bb34afa81b2ba26e5598342ad8c5f798ce78`. A new APK workflow run (`45211353283`) was started for that commit and must be inspected before claiming build success. The failed run created no APK and uploaded no build artifact. General repository CI passed on the previous checkpoint; that does not validate the Android app.
