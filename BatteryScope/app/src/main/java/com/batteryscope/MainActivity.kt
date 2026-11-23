@@ -332,6 +332,9 @@ class MainActivity : Activity() {
         }
         lines += "Foreground-app attribution permission: " + if (hasUsageAccessNow()) "GRANTED; foreground-time correlation available" else "NOT GRANTED; app-specific foreground correlation unavailable"
         lines += "Battery sampling source: ACTION_BATTERY_CHANGED + BatteryManager public properties; unavailable sentinels are retained as unavailable"
+        val keepAwake = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
+            .getBoolean(BatteryRecorderService.KEY_KEEP_CPU_AWAKE, true)
+        lines += "Recorder screen-off mode: " + if (keepAwake) "continuous CPU wake lock enabled (more complete sampling; adds app drain)" else "low-impact mode; CPU may suspend and create screen-off gaps"
         val nonSupplyRoots = setOf("typec", "usb_power_delivery", "dual_role_usb", "usb_role", "thermal", "hwmon", "@diagnostic")
         val supplies = nodes.keys.filter { !it.startsWith("@") && it.substringBefore("/") !in nonSupplyRoots }
             .map { it.substringBefore("/") }.distinct()
