@@ -2,8 +2,8 @@
 
 Last source update: 2026-11-23  
 Active branch: batteryscope  
-Current source version: 1.13  
-Current version code: 14  
+Current source version: 1.14  
+Current version code: 15  
 Application ID / namespace: com.batteryscope  
 Target handset: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 
@@ -16,6 +16,8 @@ BatteryScope is a standalone Android application. It uses standard Android APIs 
 - `app/src/main/java/com/batteryscope/MainActivity.kt` — UI, Android telemetry, ordinary-app read-only diagnosis, recorder controls, capacity panel and CSV picker.
 - `app/src/main/java/com/batteryscope/BatteryRecorderService.kt` — foreground recorder, worker thread, event capture, ordinary-app sysfs inventory, SQLite schema/history analytics and CSV writer.
 - `app/src/main/java/com/batteryscope/BatteryCapacityEstimator.kt` — pure estimator using charge-counter/SOC session deltas.
+- `app/src/main/java/com/batteryscope/BatteryRateMath.kt` — tested mA rate and SOC forecast calculations.
+- `app/src/test/java/com/batteryscope/BatteryRateMathTest.kt` — pure calculation tests.
 - `app/src/main/java/com/batteryscope/BatteryRecorderBootReceiver.kt` — user-intent-based BOOT_COMPLETED resume attempt.
 - `app/src/main/AndroidManifest.xml` — Android permissions, launcher, boot receiver and foreground-service declaration.
 - `app/src/test/java/com/batteryscope/BatteryCapacityEstimatorTest.kt` — capacity-estimator unit tests.
@@ -24,7 +26,7 @@ BatteryScope is a standalone Android application. It uses standard Android APIs 
 
 ## Current capabilities
 
-The app collects Android BatteryManager battery-side measurements and best-effort read-only class-tree attributes visible to the ordinary app process. The recorder stores 30-second framework samples and 120-second class-tree samples in a local SQLite database. Existing history summaries and CSV export remain local.
+The app collects Android BatteryManager battery-side measurements and best-effort read-only class-tree attributes visible to the ordinary app process. The recorder stores 30-second framework samples and 120-second class-tree samples in a local SQLite database. SQLite schema v3 adds optional charger-advertised maximum current/voltage, battery presence and cycle-count metadata with non-destructive migration. Live dashboard reads now run on a dedicated HandlerThread rather than the UI thread. Diagnostics report per-root visibility, read/list errors, Android property unavailability and Usage Access state. Existing history summaries and CSV export remain local. History reports percentage/hour and charge-counter-derived mA rates, screen-on/off comparisons, plugged-in battery decline, app foreground-time correlation, recent sessions, SOC threshold times and historical time-to-full/time-to-empty projections.
 
 The new Battery Health panel estimates full-charge capacity from charge-counter movement relative to percentage movement across continuous charge/discharge sessions. It examines up to 90 days, requires at least 12 percentage points of movement and consistent counter direction, uses the median of valid session estimates, and reports session count, spread and confidence. Design capacity is set to 4,500 mAh for the RMX2161. If Android does not expose a usable charge counter, no capacity value is fabricated.
 
@@ -42,9 +44,10 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 
 ## Verification state
 
-- Source changes for version 1.13 / versionCode 14 have been committed to branch `batteryscope`.
-- Capacity estimator unit tests have been added for nominal capacity, small-SOC-change rejection and counter-direction mismatch.
-- CI build and unit-test status for this new source revision: pending verification.
+- Source changes for version 1.14 / versionCode 15 have been committed to branch `batteryscope`.
+- Capacity estimator unit tests cover nominal capacity, small-SOC-change rejection, counter-direction mismatch and missing boot-count rejection.
+- Battery rate math unit tests cover battery-side mA calculations and SOC time forecasts.
+- CI build and unit-test status for version 1.14: pending external workflow verification.
 - APK artifact and SHA-256 for version 1.13: not yet verified.
 - No install or runtime test has been performed on the physical RMX2161.
 - Actual charge-counter availability and capacity-estimate accuracy on this handset remain unverified.
