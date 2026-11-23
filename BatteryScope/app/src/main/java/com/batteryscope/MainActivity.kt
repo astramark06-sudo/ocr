@@ -846,12 +846,6 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null)
-        if (::telemetryThread.isInitialized) telemetryThread.quitSafely()
-        super.onDestroy()
-    }
-
     companion object {
         private const val SYSFS_UI_REFRESH_MS = 15_000L
         private const val CSV_EXPORT_REQUEST_CODE = 5101
