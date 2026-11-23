@@ -315,6 +315,17 @@ class MainActivity : Activity() {
             }
         }
         result["@diagnostic/visible_roots"] = visibleRoots.toString()
+        val capturedFields = result.keys.count { !it.startsWith("@") }
+        result["@field_count"] = capturedFields.toString()
+        result["@field_limit"] = "1200"
+        result["@field_limit_reached"] = (result.size >= 1200).toString()
+        if (Build.VERSION.SDK_INT >= 29) {
+            result["@android_thermal_status"] = try {
+                (getSystemService(POWER_SERVICE) as android.os.PowerManager).currentThermalStatus.toString()
+            } catch (t: Throwable) {
+                "UNAVAILABLE:" + t.javaClass.simpleName + ":" + (t.message ?: "unknown")
+            }
+        }
         cachedSupplyNodes = result
         cachedSupplyRootVisible = powerSupplyRootVisible
         supplyScanCompletedAtMs = now
