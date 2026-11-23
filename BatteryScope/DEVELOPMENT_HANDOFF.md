@@ -34,6 +34,7 @@ Package: `com.batteryscope`
 
 ### Recording and analytics
 - User-started foreground service; 30-second BatteryManager sample target; 120-second kernel-tree inventory.
+- Selectable continuous mode (partial CPU wake lock for screen-off continuity) or low-impact mode (no permanent wake lock; screen-off gaps are expected and measured).
 - Local SQLite sample/event history, monotonic elapsed time and boot count.
 - Screen-on/off and power-connected/disconnected/battery-state events.
 - Optional UsageStats foreground-package correlation when user grants Usage Access.
@@ -62,7 +63,7 @@ Package: `com.batteryscope`
 - PD PDO values indicate advertised capabilities, not necessarily the selected active contract.
 - Android 12 may not expose battery cycle count or health capacity.
 - Per-app battery energy is not publicly exposed to an ordinary third-party app on this device; UsageStats foreground correlation must remain labelled as such.
-- Continuous CPU wake lock improves screen-off sampling but adds BatteryScope's own drain. The notification discloses this. Measure comparisons with consistent recorder settings.
+- Continuous CPU wake lock improves screen-off sampling but adds BatteryScope's own drain. Low-impact mode avoids the permanent wake lock but may miss screen-off samples. The notification and diagnostics disclose the selected mode. Measure comparisons with consistent recorder settings.
 - Force-stop, shutdown, OEM process restrictions and Android power management can create sampling gaps. Report observed gaps; never fabricate continuity.
 
 ## Next engineering priorities
