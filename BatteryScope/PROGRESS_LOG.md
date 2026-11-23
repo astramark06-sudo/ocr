@@ -102,3 +102,12 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Existing focused JVM tests include battery rate/forecast math, capacity estimation, reboot-aware time intervals and CSV row escaping.
 - Source version remains 1.14 / versionCode 15. No application ID or database schema change was made in this hardening pass.
 - Verification still required: inspect the Android Actions run for the exact branch head, repair any compiler/test failures, inspect the produced artifact and signature, and test on the physical RMX2161. No APK is declared verified by these source commits.
+
+
+## 2026-11-23 — Per-session screen-state charging/discharging analysis
+
+- Recent charging and discharging session reports now calculate separate display-on and display-off SOC rates from valid intervals within that session.
+- Where the charge counter is available and direction-consistent, the session report also shows separate signed battery-side mA estimates for display-on and display-off intervals.
+- Each session now estimates remaining time to 100% or 0% using its own display-on and display-off rates, while suppressing forecasts when the overall session direction is inconsistent or the threshold is already reached.
+- Display state is explicitly a usage proxy, not proof of active touch interaction. Foreground-app UsageStats correlation remains a separate approximate metric.
+- Source version remains 1.14 / versionCode 15; no database schema change. Full Android compile/test and device verification are still pending.
