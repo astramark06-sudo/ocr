@@ -56,3 +56,6 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Added pure `BatteryRateMath` and unit tests for rate and forecast arithmetic.
 - Improved kernel access diagnostics and explicit hardware scan-cap reporting.
 - GitHub Actions build and device runtime verification remain pending.
+
+- Added user-selectable continuous (wake lock enabled) and low-impact (wake lock released) recording modes. Mode is persisted, reflected in the foreground notification and diagnosis, and recorded as an event when changed. Low-impact mode allows Android deep sleep to create measurable gaps rather than forcing continuous CPU wakeups.
+- Fixed Activity teardown to stop the live telemetry HandlerThread.
