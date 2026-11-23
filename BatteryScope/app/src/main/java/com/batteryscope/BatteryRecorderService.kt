@@ -10,6 +10,8 @@ import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.ContentValues
 import android.content.Context
+import android.content.ComponentName
+import android.content.ServiceConnection
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
@@ -29,6 +31,8 @@ import org.json.JSONObject
 import java.io.Writer
 import java.util.Locale
 import kotlin.math.abs
+import rikka.shizuku.Shizuku
+import android.content.pm.PackageManager
 
 /** User-started, persistent local recorder. No activity lifecycle owns this sampler. */
 class BatteryRecorderService : Service() {
@@ -43,6 +47,8 @@ class BatteryRecorderService : Service() {
     private var lastSysfsJson = JSONObject()
     private var receiverRegistered = false
     private var samplingWakeLock: PowerManager.WakeLock? = null
+    private var privilegedService: IBatteryDiagnosticsService? = null
+    private var privilegedBinding = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -56,6 +62,33 @@ class BatteryRecorderService : Service() {
                 Intent.ACTION_BATTERY_LOW -> event("BATTERY_LOW", "Android battery-low broadcast")
                 Intent.ACTION_BATTERY_OKAY -> event("BATTERY_OKAY", "Battery-low condition cleared")
             }
+        }
+    }
+
+    private val diagnosticArgs by lazy {
+        Shizuku.UserServiceArgs(
+            ComponentName(packageName, ShizukuDiagnosticsService::class.java.name)
+        ).daemon(false)
+            .processNameSuffix("batteryscope_recorder_diag")
+            .version(4)
+            .tag("batteryscope_recorder_readonly")
+    }
+
+    private val privilegedConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            privilegedService = IBatteryDiagnosticsService.Stub.asInterface(binder)
+            privilegedBinding = false
+            event("SHIZUKU_CONNECTED", "Privileged read-only telemetry connection established")
+            handler.post {
+                lastSysfsReadMs = 0L
+                sample()
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            privilegedService = null
+            privilegedBinding = false
+            event("SHIZUKU_DISCONNECTED", "Privileged telemetry connection lost; ordinary app telemetry continues")
         }
     }
 
@@ -79,6 +112,10 @@ class BatteryRecorderService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_ENABLE_SHIZUKU) {
+            bindPrivilegedTelemetry()
+            return START_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             stopRecorder()
             return START_NOT_STICKY
@@ -87,6 +124,7 @@ class BatteryRecorderService : Service() {
             startAsForeground()
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, true).apply()
             acquireSamplingWakeLock()
+            bindPrivilegedTelemetry()
             event(if (intent == null) "RECORDER_RESTARTED" else "RECORDER_STARTED",
                 "Foreground recorder; 30-second sampling; CPU partial wake lock held while recording (adds app power use)")
             handler.removeCallbacks(sampler)
@@ -111,6 +149,25 @@ class BatteryRecorderService : Service() {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun bindPrivilegedTelemetry() {
+        if (privilegedService != null || privilegedBinding) return
+        try {
+            if (!Shizuku.pingBinder()) {
+                event("SHIZUKU_UNAVAILABLE", "Start Shizuku using Wireless debugging and run the audit to enable privileged history")
+                return
+            }
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                event("SHIZUKU_PERMISSION_REQUIRED", "Grant BatteryScope access in Shizuku, then run the power-path audit")
+                return
+            }
+            privilegedBinding = true
+            Shizuku.bindUserService(diagnosticArgs, privilegedConnection)
+        } catch (t: Throwable) {
+            privilegedBinding = false
+            event("SHIZUKU_BIND_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
         }
     }
 
@@ -207,6 +264,18 @@ class BatteryRecorderService : Service() {
         if (refreshSysfs) {
             lastSysfsJson = readHardwareTrees()
             lastSysfsReadMs = now
+            val privileged = privilegedService
+            if (privileged != null) {
+                try {
+                    lastSysfsJson.put("@shizuku_snapshot", privileged.snapshotLink())
+                } catch (t: Throwable) {
+                    lastSysfsJson.put("@shizuku_error", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
+                    event("SHIZUKU_SNAPSHOT_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
+                    privilegedService = null
+                }
+            } else {
+                lastSysfsJson.put("@shizuku_snapshot", "UNAVAILABLE: Shizuku not connected/authorized")
+            }
         }
         val usb = findUsbCandidate(lastSysfsJson)
         val row = ContentValues().apply {
@@ -368,6 +437,11 @@ class BatteryRecorderService : Service() {
     private fun stopRecorder() {
         handler.removeCallbacks(sampler)
         releaseSamplingWakeLock()
+        try {
+            if (privilegedBinding || privilegedService != null) Shizuku.unbindUserService(diagnosticArgs, privilegedConnection, true)
+        } catch (_: Throwable) { }
+        privilegedService = null
+        privilegedBinding = false
         event("RECORDER_STOPPED", "Stopped by user")
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
         if (receiverRegistered) {
@@ -388,6 +462,11 @@ class BatteryRecorderService : Service() {
     override fun onDestroy() {
         handler.removeCallbacks(sampler)
         releaseSamplingWakeLock()
+        try {
+            if (privilegedBinding || privilegedService != null) Shizuku.unbindUserService(diagnosticArgs, privilegedConnection, true)
+        } catch (_: Throwable) { }
+        privilegedService = null
+        privilegedBinding = false
         if (receiverRegistered) try { unregisterReceiver(receiver) } catch (_: Throwable) { }
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
         try { db.close() } catch (_: Throwable) { }
@@ -398,6 +477,7 @@ class BatteryRecorderService : Service() {
     companion object {
         const val ACTION_START = "com.batteryscope.action.START_RECORDER"
         const val ACTION_STOP = "com.batteryscope.action.STOP_RECORDER"
+        const val ACTION_ENABLE_SHIZUKU = "com.batteryscope.action.ENABLE_SHIZUKU"
         const val PREFS = "batteryscope_recorder"
         const val KEY_ACTIVE = "recorder_active"
         const val SAMPLE_INTERVAL_MS = 30_000L
