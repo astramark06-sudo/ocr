@@ -205,4 +205,7 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Added BatteryMeasurementQuality to validate current polarity and voltage range, suppress invalid battery-side watts, retain raw values, and log quality transitions. Simplified the live battery summary. Added eight unit tests.
 - Corrected UsageStats foreground event timestamps to preserve the original event timestamp rather than sample/poll time.
 - Bumped app version to 1.15 / versionCode 16; application ID and SQLite schema v4 unchanged.
-- v1.15 Android CI and physical RMX2161 validation are pending. The app still does not implement the planned NetworkStats, StorageStats, sensor, RAM, CPU/GPU and installed-app collectors.
+- v1.15 Android CI run 45223861385 passed; all 22 JVM tests passed and the 914,326-byte APK was verified. APK SHA-256: `0c8f37eb4777b9ece9a1241a85e4805bab06dd5fd4b0bdde339f748c384b32ac`; signer SHA-256: `fe463192e3a055244ed627fbd8a8907f535263166e619c5bca686924b15094c2`. Physical RMX2161 validation remains pending. The app still does not implement the planned NetworkStats, StorageStats, sensor, RAM, CPU/GPU and installed-app collectors.
+
+
+- Removed duplicate `batteryscope-build.yml` after confirming its independent runner produced an APK with identical uncompressed contents but a different debug signature; `batteryscope-android.yml` is the single authoritative workflow.
