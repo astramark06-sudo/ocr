@@ -39,7 +39,7 @@ Package: `com.batteryscope`
 - Duplicate MainActivity lifecycle override found during review was removed.
 
 ### Recording and analytics
-- Automatically requested foreground service on Activity resume; boot and package-replacement receivers request recovery; 30-second BatteryManager sample target; 120-second kernel-tree inventory. The latest lifecycle edits passed the v1.14 CI build; v1.15 telemetry corrections require their own CI and device validation.
+- Automatically requested foreground service on Activity resume; boot and package-replacement receivers request recovery; 30-second BatteryManager sample target; 120-second kernel-tree inventory. Version 1.15 passed the authoritative Android CI build and all 22 JVM tests in run 45223861385. Physical RMX2161 validation remains outstanding.
 - Selectable continuous mode (partial CPU wake lock for screen-off continuity) or low-impact mode (no permanent wake lock; screen-off gaps are expected and measured).
 - Local SQLite sample/event history, monotonic elapsed time and boot count.
 - Screen-on/off and power-connected/disconnected/battery-state events.
@@ -120,4 +120,9 @@ Read [FORENSIC_AUDIT_2026-11-23.md](FORENSIC_AUDIT_2026-11-23.md) for the exact 
 
 Version is 1.15 / versionCode 16; applicationId remains com.batteryscope; database remains schema v4. Eight new JVM tests were added. Do not install a new CI debug APK over an existing installation until its signing-certificate digest is compared.
 
-Outstanding: v1.15 CI build, physical charging/discharging tests on RMX2161, 24-hour screen-off continuity test, and implementation of the remaining device-wide collectors in DEVICE_TELEMETRY_ARCHITECTURE.md.
+Outstanding: physical charging/discharging tests on RMX2161, 24-hour screen-off continuity test, stable production signing key for upgrade continuity, and implementation of the remaining device-wide collectors in DEVICE_TELEMETRY_ARCHITECTURE.md.
+
+
+## Verified v1.15 artifact
+
+The authoritative run is [45223861385](https://github.com/astramark06-sudo/test/actions/runs/45223861385), app source commit `480a567cd7c90f552976dc60472fa6ef11a5e126`. All 22 JVM tests passed. APK: 914,326 bytes, SHA-256 `0c8f37eb4777b9ece9a1241a85e4805bab06dd5fd4b0bdde339f748c384b32ac`; signer SHA-256 `fe463192e3a055244ed627fbd8a8907f535263166e619c5bca686924b15094c2`. This signer differs from the previous v1.14 debug signer. Do not install over the existing app. See FORENSIC_AUDIT_2026-11-23.md for full artifact verification.
