@@ -151,6 +151,7 @@ class BatteryRecorderService : Service() {
             handler.removeCallbacks(sampler)
             handler.post(sampler)
         } catch (t: Throwable) {
+            recorderRunning = false
             event("RECORDER_START_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putBoolean(KEY_ACTIVE, false).putBoolean(KEY_USER_ENABLED, false).apply()
