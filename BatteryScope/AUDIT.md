@@ -204,3 +204,27 @@ Release acceptance requires:
 - USB-PD PDO data does not prove the selected contract.
 - No public Android API grants arbitrary control over charger protocol negotiation.
 - No non-root capability to force SuperDart/VOOC or choose an arbitrary adapter profile has been verified.
+
+
+## 9. Persistent recording and history (v1.10 development milestone)
+
+### Recorder lifecycle
+- The user explicitly starts and stops BatteryRecorderService from the visible app UI.
+- The service uses the Android foreground-service type `specialUse` with an explicit subtype declaration and an ongoing notification. Android 14+ requires an appropriate declared type and permission; Google Play review may require a justification for this service type.
+- The service samples core Android battery values every 30 seconds and refreshes ordinary-app power-supply sysfs attributes every 120 seconds.
+- SQLite stores raw samples and event rows locally. There is no automatic raw-history deletion in this milestone. The app exports all stored sample and event rows to CSV.
+- START_STICKY allows Android to recreate the service after some process deaths. It does not guarantee survival after force-stop, reboot, power-off, OEM battery management or user termination. No boot auto-start is configured in this milestone.
+
+### Usage and attribution
+- `PACKAGE_USAGE_STATS` is a special access permission granted manually from Android Settings.
+- When granted, BatteryScope records foreground package transitions and the package associated with each sampled interval, plus whether the screen was interactive.
+- Foreground duration is approximate at the 30-second sampling resolution.
+- The current implementation does not measure a per-app electrical current. Any later drain correlation must be labelled estimated/correlated, not direct measurement.
+- Android BatteryStats attribution remains a separate source and requires Shizuku access to dumpsys output. The current persistent service does not keep the Shizuku UserService bound after the Activity is destroyed.
+
+### Analytics limits
+- Rolling 24-hour, 7-day and 30-day summaries report charge/discharge time represented by valid adjacent samples and net percentage change per recorded hour.
+- Gaps longer than three sample intervals are excluded from rate-duration calculations to avoid treating recorder downtime as a measured charge/discharge interval.
+- This milestone does not yet calculate complete per-session time-to-50/80/90/100/full, 100-to-20/10/empty or robust charger-vs-usage comparisons. Those require session segmentation and milestone interpolation over the stored history.
+- App foreground intervals are not app energy attribution.
+- USB sysfs values are candidate source telemetry only; the exact RMX2161 path and driver units must be verified on-device.
