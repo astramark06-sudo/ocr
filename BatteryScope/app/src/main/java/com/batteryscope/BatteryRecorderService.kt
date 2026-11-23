@@ -1029,7 +1029,7 @@ class RecorderDatabase(context: Context) :
     }
 
     fun exportCsv(writer: Writer) {
-        writer.write(RecorderCsv.encodeRow(listOf("record_type","timestamp_ms","elapsed_realtime_ms","battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","event_type","details")))
+        writer.write(RecorderCsv.encodeRow(listOf("record_type","timestamp_ms","elapsed_realtime_ms","battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","boot_count","event_type","details")))
         val sampleNames = listOf("battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","boot_count")
         readableDatabase.rawQuery("SELECT * FROM samples ORDER BY timestamp_ms", null).use { samples ->
             readableDatabase.rawQuery("SELECT timestamp_ms,event_type,details FROM events ORDER BY timestamp_ms", null).use { events ->
@@ -1050,7 +1050,7 @@ class RecorderDatabase(context: Context) :
                     } else {
                         val fields = listOf("EVENT", events.getLong(0).toString(), "") +
                             List(sampleNames.size) { "" } + listOf(events.getString(1), events.getString(2))
-                        writer.write(fields.joinToString(",") { csv(it) } + "\\n")
+                        writer.write(RecorderCsv.encodeRow(fields))
                         hasEvent = events.moveToNext()
                     }
                 }
@@ -1063,6 +1063,4 @@ class RecorderDatabase(context: Context) :
         return if (c.isNull(index)) "" else c.getString(index) ?: ""
     }
 
-    private fun csv(value: String): String =
-        "\"" + value.replace("\"", "\"\"").replace("\n", " ").replace("\r", " ") + "\""
 }
