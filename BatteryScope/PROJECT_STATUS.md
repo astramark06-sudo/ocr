@@ -46,7 +46,7 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 
 - Source changes for version 1.14 / versionCode 15 have been committed to branch `batteryscope`.
 - Capacity estimator unit tests cover nominal capacity, small-SOC-change rejection, counter-direction mismatch and missing boot-count rejection.
-- Battery rate math unit tests cover battery-side mA calculations and SOC time forecasts.
+- Battery rate math unit tests cover battery-side mA calculations and SOC time forecasts; battery percentage math tests reject missing or invalid Android level/scale metadata.
 - Source-level checks completed: no Shizuku/privileged service references in MainActivity, recorder service, manifest or Gradle dependencies; CSV header/sample/event row alignment verified at 28 fields; isolated Kotlin arithmetic checks passed for battery-side mA and SOC forecasts.
 - Fixed a duplicate MainActivity lifecycle override that would have blocked Kotlin compilation. Recorder event writes and orderly database shutdown were moved off the Android main thread; the boot receiver no longer opens SQLite during BOOT_COMPLETED.
 - Added a dedicated GitHub Actions workflow for Android Gradle tests, debug APK assembly, package/version verification, APK signature/certificate reporting and artifact upload. Its run result for the latest branch head is not yet confirmed.
