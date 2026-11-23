@@ -33,7 +33,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
-/** User-started, persistent local recorder. No activity lifecycle owns this sampler. */
+/** Automatically requested persistent foreground recorder. No activity lifecycle owns this sampler. */
 class BatteryRecorderService : Service() {
     private lateinit var handler: Handler
     private lateinit var worker: HandlerThread
@@ -367,14 +367,14 @@ class BatteryRecorderService : Service() {
                     UsageEvents.Event.ACTIVITY_RESUMED, UsageEvents.Event.MOVE_TO_FOREGROUND -> {
                         val next = event.packageName
                         if (next != foregroundPackage) {
-                            if (foregroundPackage != null) this.event("APP_FOREGROUND_END", foregroundPackage!!)
+                            if (foregroundPackage != null) this.eventAt(event.timeStamp, "APP_FOREGROUND_END", foregroundPackage!!)
                             foregroundPackage = next
-                            this.event("APP_FOREGROUND_START", next)
+                            this.eventAt(event.timeStamp, "APP_FOREGROUND_START", next)
                         }
                     }
                     UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.MOVE_TO_BACKGROUND -> {
                         if (event.packageName == foregroundPackage) {
-                            this.event("APP_FOREGROUND_END", event.packageName)
+                            this.eventAt(event.timeStamp, "APP_FOREGROUND_END", event.packageName)
                             foregroundPackage = null
                         }
                     }
@@ -497,19 +497,23 @@ class BatteryRecorderService : Service() {
      * Queue their SQLite writes on the recorder worker so storage latency cannot
      * stall Android's main thread. Calls already on the worker stay ordered inline.
      */
-    private fun event(type: String, details: String) {
+    private fun event(type: String, details: String) =
+        eventAt(System.currentTimeMillis(), type, details)
+
+    /** Preserve source timestamps for UsageStats events instead of stamping poll time. */
+    private fun eventAt(timestampMs: Long, type: String, details: String) {
         if (::handler.isInitialized && Looper.myLooper() != worker.looper) {
-            handler.post { writeEventOnWorker(type, details) }
+            handler.post { writeEventOnWorker(timestampMs, type, details) }
         } else {
-            writeEventOnWorker(type, details)
+            writeEventOnWorker(timestampMs, type, details)
         }
     }
 
-    private fun writeEventOnWorker(type: String, details: String) {
+    private fun writeEventOnWorker(timestampMs: Long, type: String, details: String) {
         synchronized(databaseLock) {
             if (!databaseAvailable) return
             try {
-                db.insertEvent(System.currentTimeMillis(), type, details)
+                db.insertEvent(timestampMs, type, details)
             } catch (_: Throwable) {
                 // A failed diagnostic write must never crash the recorder or UI.
             }
