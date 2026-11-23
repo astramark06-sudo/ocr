@@ -294,3 +294,6 @@ JVM unit tests cover quoted commas, escaped quotes, embedded line breaks, empty 
 ## 1.12 reboot-boundary correction
 
 The prior interval helper treated any positive elapsedRealtime delta as same-boot continuity. After a reboot, the new uptime can exceed the previous boot's uptime, so this test alone could incorrectly omit powered-off time. Version 1.12 persists `Settings.Global.BOOT_COUNT` with each sample and uses elapsedRealtime only when both samples have the same known boot count. When boot counts differ, it uses wall-clock delta, which includes the reboot gap. If the boot count is unavailable, monotonic time is accepted only when it agrees with wall time within 120 seconds; otherwise the wall-clock delta is used. Existing v1 history is preserved by a SQLite schema migration that adds the nullable boot_count column.
+
+
+The v1.12 history export also performs database streaming and SAF destination copying on background threads. This avoids doing potentially long-running I/O on MainActivity's UI thread. The export remains an app-private intermediate file followed by a user-selected document-provider copy.
