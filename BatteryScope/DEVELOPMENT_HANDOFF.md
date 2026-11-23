@@ -4,7 +4,7 @@ Last updated: 2026-11-23
 Repository: https://github.com/astramark06-sudo/test  
 Active branch: `batteryscope`  
 Target device: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted  
-Current source version: 1.14 / versionCode 15  
+Current source version: 1.15 / versionCode 16  
 Package: `com.batteryscope`
 
 ## Non-negotiable architecture
@@ -31,7 +31,7 @@ Package: `com.batteryscope`
 - Read-only inventory of power_supply, Type-C, USB-PD, USB role, thermal, hwmon and selected non-serial USB descriptor attributes.
 - Vendor/Oplus/VOOC fields are raw state indicators only; no proprietary handshake or protocol claims.
 - Per-root and per-file visibility/read/list diagnostics; distinguishes definitely unavailable from permission denied and absent-or-SELinux-hidden.
-- BatteryManager diagnostics distinguish unavailable sentinels, SecurityException and other exception classes for current, average current, charge counter and energy counter; missing battery broadcast/level/voltage/temperature extras are reported separately. Recorder logs property-access state transitions without writing an event every sample. Percentage diagnostics identify missing level vs missing scale vs invalid values.
+- BatteryManager diagnostics distinguish unavailable sentinels, SecurityException and other exception classes for current, average current, charge counter and energy counter; missing battery broadcast/level/voltage/temperature extras are reported separately. Version 1.15 also validates current polarity and voltage range, records quality transitions, and excludes invalid readings from battery-side wattage.
 - Usage Access status is displayed for foreground-app correlation.
 - Live dashboard file traversal and BatteryManager reads run on a dedicated HandlerThread.
 - Recorder event writes triggered by service/broadcast callbacks are queued on the recorder HandlerThread; database close is queued after pending work to avoid main-thread SQLite stalls and dropped events.
@@ -39,7 +39,7 @@ Package: `com.batteryscope`
 - Duplicate MainActivity lifecycle override found during review was removed.
 
 ### Recording and analytics
-- Automatically requested foreground service on Activity resume; boot and package-replacement receivers request recovery; 30-second BatteryManager sample target; 120-second kernel-tree inventory. The latest lifecycle edits still require CI and device validation.
+- Automatically requested foreground service on Activity resume; boot and package-replacement receivers request recovery; 30-second BatteryManager sample target; 120-second kernel-tree inventory. The latest lifecycle edits passed the v1.14 CI build; v1.15 telemetry corrections require their own CI and device validation.
 - Selectable continuous mode (partial CPU wake lock for screen-off continuity) or low-impact mode (no permanent wake lock; screen-off gaps are expected and measured).
 - Local SQLite sample/event history, monotonic elapsed time and boot count.
 - Screen-on/off and power-connected/disconnected/battery-state events.
@@ -112,3 +112,4 @@ Review of `BatteryScope_History_20261123_214733.csv`: 22 samples / 51 events acr
 Critical: voltage export is 3–4 in a column named `battery_voltage_mv`; source expects 2,500–5,000 mV and currently rejects these values for live power calculation. Current export is 14–674 in `battery_current_ua` (mean 201.9), but the charge-counter endpoint delta implies roughly 595.8 mA over the whole session; counter values move in coarse 45,000 µAh steps. Do not assume whether the OEM API returns volts/millivolts or mA/µA from this file alone. Do not apply a heuristic multiplier to historical data. Preserve raw readings and add explicit raw-unit/device validation before trusting battery-side watts.
 
 Other gaps: average current, energy counter, cycle count, charger max values and USB V/I candidates were null; Usage Access was off in 20/22 samples; one sample interval was 154.741s; kernel roots were denied or absent/hidden and no fields were captured. This is a short recording, not proof of 24/7 continuity. Next: collect one unplugged discharge and one charging capture with Usage Access enabled, compare BatteryManager raw values to same-supply battery sysfs values if accessible, and independently verify voltage/current units before changing scaling. Never claim USB-input watts from battery-side values.
+\n\n## 2026-11-23 forensic audit and v1.15 changes\n\nRead [FORENSIC_AUDIT_2026-11-23.md](FORENSIC_AUDIT_2026-11-23.md) for the exact APK/artifact hashes, branch/build commit comparison, 55-sample RMX2161 export findings, source defects and verification limits. The new BatteryMeasurementQuality helper refuses to interpret current with a sign inconsistent with Android's documented convention, refuses voltage outside 2,500–5,000 mV, and returns no battery-side watts unless both inputs pass. Raw values remain unchanged. Quality transitions are written to the event history. The live battery summary is shorter and foreground UsageStats event timestamps now use the source event time.\n\nVersion is 1.15 / versionCode 16; applicationId remains com.batteryscope; database remains schema v4. Eight new JVM tests were added. Do not install a new CI debug APK over an existing installation until its signing-certificate digest is compared.\n\nOutstanding: v1.15 CI build, physical charging/discharging tests on RMX2161, 24-hour screen-off continuity test, and implementation of the remaining device-wide collectors in DEVICE_TELEMETRY_ARCHITECTURE.md.\n
