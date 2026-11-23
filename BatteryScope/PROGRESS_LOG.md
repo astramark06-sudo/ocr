@@ -120,3 +120,9 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Attribution is intentionally limited to intervals where the same package is foreground at both sample endpoints and the display is on. These values are temporal correlation, not direct per-app electrical energy or proof of causation.
 - Missing charge-counter intervals remain `n/a`; no per-app mAh is fabricated.
 - No database schema change. Android build/test and physical handset verification remain pending.
+
+
+## Android CI artifact verification scope
+
+- The Android workflow's APK verification step now runs `apksigner verify --verbose --print-certs` and saves the signing-certificate details alongside the APK SHA-256, package metadata and test report.
+- The workflow is configured but its result for the current branch head has not been confirmed through the available GitHub status interface. Do not claim CI passed or distribute an artifact until the exact run is inspected.
