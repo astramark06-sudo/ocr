@@ -514,7 +514,7 @@ class MainActivity : Activity() {
             appendLine("Control writes: NEVER PERFORMED")
             appendLine()
             append(buildMeasurementDiagnosis(reading.supplies, reading.supplyRootReadable))
-            append("Refresh: ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())} • 1 second")
+            append("Refresh: ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())} • 2-second dashboard refresh")
         }
 
         runOnUiThread {
