@@ -41,6 +41,8 @@ class BatteryRecorderService : Service() {
     private lateinit var handler: Handler
     private lateinit var worker: HandlerThread
     private lateinit var db: RecorderDatabase
+    private val databaseLock = Any()
+    private var databaseAvailable = true
     private lateinit var batteryManager: BatteryManager
     @Volatile private var batteryIntent: Intent? = null
     private var lastUsageQueryMs = 0L
@@ -336,7 +338,7 @@ class BatteryRecorderService : Service() {
                 put("usb_current_candidate_ua", usb.second)
             }
         }
-        db.insertSample(row)
+        insertSample(row)
     }
 
     private fun longProperty(id: Int): Long? = try {
@@ -483,8 +485,23 @@ class BatteryRecorderService : Service() {
         return null
     }
 
+    private fun insertSample(values: ContentValues) {
+        synchronized(databaseLock) {
+            if (!databaseAvailable) return
+            try {
+                db.insertSample(values)
+            } catch (t: Throwable) {
+                try { db.insertEvent(System.currentTimeMillis(), "DATABASE_SAMPLE_WRITE_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown")) }
+                catch (_: Throwable) { }
+            }
+        }
+    }
+
     private fun event(type: String, details: String) {
-        try { db.insertEvent(System.currentTimeMillis(), type, details) } catch (_: Throwable) { }
+        synchronized(databaseLock) {
+            if (!databaseAvailable) return
+            try { db.insertEvent(System.currentTimeMillis(), type, details) } catch (_: Throwable) { }
+        }
     }
 
     private fun stopRecorder() {
@@ -523,7 +540,10 @@ class BatteryRecorderService : Service() {
         privilegedBinding = false
         if (receiverRegistered) try { unregisterReceiver(receiver) } catch (_: Throwable) { }
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
-        try { db.close() } catch (_: Throwable) { }
+        synchronized(databaseLock) {
+            databaseAvailable = false
+            try { db.close() } catch (_: Throwable) { }
+        }
         try { worker.quitSafely() } catch (_: Throwable) { }
         super.onDestroy()
     }
