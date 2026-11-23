@@ -104,7 +104,8 @@ class BatteryRecorderService : Service() {
             startAsForeground()
             recorderRunning = true
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                .putBoolean(KEY_ACTIVE, true).putBoolean(KEY_USER_ENABLED, true).apply()
+                .putBoolean(KEY_ACTIVE, true).putBoolean(KEY_USER_ENABLED, true)
+                .remove(KEY_BOOT_RESUME_FAILURE).remove(KEY_BOOT_RESUME_FAILURE_AT).apply()
             val keepAwake = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_KEEP_CPU_AWAKE, true)
             if (keepAwake) acquireSamplingWakeLock() else releaseSamplingWakeLock()
             event(if (intent == null) "RECORDER_RESTARTED" else "RECORDER_STARTED",
@@ -516,6 +517,8 @@ class BatteryRecorderService : Service() {
         const val KEY_ACTIVE = "recorder_active"
         const val KEY_USER_ENABLED = "recorder_user_enabled"
         const val KEY_KEEP_CPU_AWAKE = "keep_cpu_awake"
+        const val KEY_BOOT_RESUME_FAILURE = "boot_resume_failure"
+        const val KEY_BOOT_RESUME_FAILURE_AT = "boot_resume_failure_at"
         const val ACTION_RECONFIGURE = "com.batteryscope.action.RECONFIGURE_RECORDER"
         const val SAMPLE_INTERVAL_MS = 30_000L
         private const val SYSFS_INTERVAL_MS = 120_000L
