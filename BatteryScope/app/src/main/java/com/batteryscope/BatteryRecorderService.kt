@@ -612,7 +612,7 @@ class RecorderDatabase(context: Context) :
                 appendLine("Charging screen OFF: " + stats.chargeOffHours + " h • +" + stats.chargeOffPct + "% • " + stats.chargeOffRate + " %/h")
                 appendLine("Discharging screen ON: " + stats.drainOnHours + " h • -" + stats.drainOnPct + "% • " + stats.drainOnRate + " %/h")
                 appendLine("Discharging screen OFF: " + stats.drainOffHours + " h • -" + stats.drainOffPct + "% • " + stats.drainOffRate + " %/h")
-                appendLine("Battery decline while charger remains connected: " + stats.pluggedDrainHours + " h • -" + stats.pluggedDrainPct + "% • " + stats.pluggedDrainRate + " %/h")
+                appendLine("Battery decline while Android reports CHARGING or both samples show a connected source: " + stats.pluggedDrainHours + " h • -" + stats.pluggedDrainPct + "% • " + stats.pluggedDrainRate + " %/h")
                 appendLine("  Plugged decline screen ON: " + stats.pluggedDrainOnHours + " h • -" + stats.pluggedDrainOnPct + "% • " + stats.pluggedDrainOnRate + " %/h")
                 appendLine("  Plugged decline screen OFF: " + stats.pluggedDrainOffHours + " h • -" + stats.pluggedDrainOffPct + "% • " + stats.pluggedDrainOffRate + " %/h")
                 appendLine("Screen state samples: ON " + stats.screenOn + " • OFF " + stats.screenOff)
@@ -789,7 +789,9 @@ class RecorderDatabase(context: Context) :
                             val counterDelta = if (before.chargeCounter != null && after.chargeCounter != null)
                                 after.chargeCounter - before.chargeCounter else 0L
                             val bothPlugged = before.plug != "NONE" && after.plug != "NONE"
-                            if (bothPlugged && delta < 0.0) {
+                            val androidReportsCharging = charging(before) && charging(after)
+                            if ((bothPlugged || androidReportsCharging) && delta < 0.0) {
+                                // Some ROMs report EXTRA_PLUGGED=NONE while BATTERY_STATUS remains CHARGING.
                                 add(pluggedDrain, dt, -delta, (-counterDelta).coerceAtLeast(0L))
                                 add(if (after.screen) pluggedDrainOn else pluggedDrainOff, dt, -delta, (-counterDelta).coerceAtLeast(0L))
                                 if (sameApp) appPluggedDrain[after.app] = (appPluggedDrain[after.app] ?: 0.0) - delta
