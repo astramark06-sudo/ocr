@@ -1,5 +1,14 @@
 # BatteryScope changelog
 
+## Unreleased — automatic monitoring and device-wide telemetry foundation
+- Added a device-wide telemetry architecture and Android capability audit covering UsageStatsManager, NetworkStatsManager, StorageStatsManager, PowerManager thermal APIs, ActivityManager memory information, SensorManager inventory and best-effort kernel sources.
+- Documented privileged BatteryStats limits, app-usage event retention, per-UID network semantics, and the requirement for an RMX2161 on-device capability census.
+- Removed the obsolete Shizuku diagnostics source stub.
+- Changed recorder lifecycle to request monitoring automatically when the app resumes and to request recovery after boot or app replacement.
+- Removed the in-app Start/Stop controls and service stop action. Foreground-service, wake-lock, force-stop and Realme background-policy limitations remain.
+- Build, test, APK-signing and physical-device validation are pending for these lifecycle changes.
+
+
 ## 1.14 — expanded telemetry, diagnostics and non-blocking live dashboard
 - Moved live BatteryManager and kernel class-tree reads to a dedicated HandlerThread; dashboard refresh no longer traverses sysfs on the UI thread.
 - Added a persisted continuous/low-impact recorder mode: continuous holds a partial CPU wake lock for screen-off continuity; low-impact releases it and exposes resulting sample gaps.
