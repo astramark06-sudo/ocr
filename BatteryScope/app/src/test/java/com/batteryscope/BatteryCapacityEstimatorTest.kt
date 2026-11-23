@@ -37,4 +37,12 @@ class BatteryCapacityEstimatorTest {
         )
         assertNull(BatteryCapacityEstimator.estimate(samples))
     }
+    @Test
+    fun rejectsSessionsWithoutBootCountEvidence() {
+        val samples = listOf(
+            CapacitySample(1_000L, null, 40, "CHARGING", "USB", 1_800_000L),
+            CapacitySample(2_000L, null, 60, "CHARGING", "USB", 2_700_000L)
+        )
+        assertNull(BatteryCapacityEstimator.estimate(samples))
+    }
 }
