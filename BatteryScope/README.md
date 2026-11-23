@@ -62,6 +62,6 @@ No Shizuku app, root, ADB setup or companion service is required.
 
 ## Build and validation
 
-GitHub Actions builds a debug APK with Java 17, Gradle 8.9 and Android SDK 35, runs JVM unit tests, checks package metadata and uploads the APK plus build information. A successful CI build proves compilation and the configured checks only. It does not prove installation, measurement accuracy, background continuity or capacity-estimate accuracy on the physical RMX2161.
+GitHub Actions is configured to build a debug APK with Java 17, Gradle 8.9 and Android SDK 35, run JVM unit tests, check package metadata and upload the APK plus build information. The workflow's result must be checked for the exact commit before treating an artifact as verified. A successful CI build proves compilation and the configured checks only; it does not prove installation, measurement accuracy, background continuity or capacity-estimate accuracy on the physical RMX2161.
 
 See `AUDIT.md` for measurement limits, `CHANGELOG.md` for source history, `PROJECT_STATUS.md` for verification state and `RELEASE_CHECKLIST.md` for the release gate.
