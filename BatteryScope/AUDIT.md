@@ -12,7 +12,7 @@ BatteryScope is a standalone Android application. It uses standard Android frame
 
 | Signal | Source | Interpretation |
 |---|---|---|
-| State of charge | `ACTION_BATTERY_CHANGED` | Percentage reported by Android |
+| State of charge | `ACTION_BATTERY_CHANGED` | Percentage computed only from a valid EXTRA_LEVEL/EXTRA_SCALE pair; missing or out-of-range inputs remain unavailable |
 | Battery voltage | `EXTRA_VOLTAGE` | Battery-side voltage, mV |
 | Battery temperature | `EXTRA_TEMPERATURE` | Tenths of °C |
 | Instantaneous current | `BATTERY_PROPERTY_CURRENT_NOW` | Battery-side current, µA |
