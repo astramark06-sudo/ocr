@@ -14,7 +14,7 @@ Where the phone's fuel gauge and ROM expose them, Android BatteryManager provide
 Important distinctions:
 - BatteryManager current and voltage are battery-side measurements, not USB adapter output.
 - The charge counter is an estimate of remaining charge, not full-charge capacity (FCC).
-- Android health GOOD is a framework status, not a measured battery-health percentage.
+- Android health GOOD is a framework status, not a measured battery-health percentage. When readable, the app also reports kernel fuel-gauge `charge_full`, `charge_full_design` and `cycle_count` attributes; the charge-full/design ratio is shown separately from BatteryScope's empirical history estimate.
 - Missing, denied or invalid readings remain unavailable; they are never substituted with zero.
 
 BatteryScope also attempts bounded, read-only inspection of ordinary-app-visible power-supply, Type-C, USB-PD, USB-role, thermal and hwmon class attributes. Android/Realme permissions may deny individual paths. Any same-supply USB voltage/current pair remains a candidate until its semantics are verified on the handset. The app does not infer charger input watts from battery-side current, decode the proprietary SuperDart wire handshake, negotiate charging protocols or write sysfs controls.
