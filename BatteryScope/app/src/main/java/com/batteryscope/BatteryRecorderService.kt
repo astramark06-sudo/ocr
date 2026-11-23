@@ -46,6 +46,7 @@ class BatteryRecorderService : Service() {
     private var lastSampleState: String? = null
     private var lastSamplePlug: String? = null
     private var lastSysfsReadMs = 0L
+    private var lastFullAuditMs = 0L
     private var lastSysfsJson = JSONObject()
     private var receiverRegistered = false
     private var samplingWakeLock: PowerManager.WakeLock? = null
@@ -291,6 +292,15 @@ class BatteryRecorderService : Service() {
             if (privileged != null) {
                 try {
                     lastSysfsJson.put("@shizuku_snapshot", privileged.snapshotLink())
+                    if (now - lastFullAuditMs >= FULL_AUDIT_INTERVAL_MS) {
+                        val audit = privileged.scan()
+                        val storedAudit = if (audit.length > MAX_AUDIT_CHARS) {
+                            audit.take(MAX_AUDIT_CHARS) + "\n[TRUNCATED at " + MAX_AUDIT_CHARS + " characters]"
+                        } else audit
+                        lastSysfsJson.put("@shizuku_full_audit", storedAudit)
+                        lastFullAuditMs = now
+                        event("SHIZUKU_FULL_AUDIT_CAPTURED", "Stored read-only audit chars=" + storedAudit.length)
+                    }
                 } catch (t: Throwable) {
                     lastSysfsJson.put("@shizuku_error", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
                     event("SHIZUKU_SNAPSHOT_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
@@ -514,6 +524,8 @@ class BatteryRecorderService : Service() {
         const val KEY_ACTIVE = "recorder_active"
         const val KEY_USER_ENABLED = "recorder_user_enabled"
         const val SAMPLE_INTERVAL_MS = 30_000L
+        private const val FULL_AUDIT_INTERVAL_MS = 15L * 60 * 1000
+        private const val MAX_AUDIT_CHARS = 100_000
         private const val SYSFS_INTERVAL_MS = 120_000L
         private const val MAX_SYSFS_FIELDS = 180
         private const val CHANNEL_ID = "batteryscope_recorder"
@@ -576,7 +588,7 @@ class RecorderDatabase(context: Context) :
             }
             appendLine("BATTERYSCOPE LOCAL HISTORY • RAW SAMPLES RETAINED UNTIL USER DELETES APP DATA")
             appendLine("Stored samples: " + total + " • target sample interval: 30 seconds")
-            appendLine("App attribution is correlated/estimated from foreground time and coincident battery change; it is not a direct per-app electrical measurement.")
+            appendLine("App foreground correlation is not a direct per-app electrical measurement. Shizuku framework/system audit snapshots are retained every 15 minutes when authorized.")
             for ((label, duration) in windows) {
                 val rows = if (duration == 90L * 24 * 60 * 60 * 1000) allRows else readWindow(now - duration)
                 val s = summarise(rows)
