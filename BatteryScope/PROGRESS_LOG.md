@@ -158,3 +158,18 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Verified the Android workflow includes JVM tests, APK assembly, package/version checks, APK signature/certificate reporting, checksum and artifact upload even when the build/test step fails.
 - The GitHub combined-status response for the latest inspected source commit contains no status entries; the available workflow-run lookup is limited to pull-request-triggered runs. Therefore the push-triggered Android workflow result is not confirmed here.
 - Local environment has Kotlin/JDK but no Gradle installation or Android SDK. Full Android build, artifact inspection and RMX2161 hardware validation remain outstanding.
+
+
+## 2026-11-23 — Device-wide telemetry architecture and automatic recorder lifecycle
+
+- Confirmed branch head before changes was `a5a6dea8453b0f0943520ff785b195dca17ad1a6`, source version 1.14 / versionCode 15.
+- Inspected repository instructions, manifest, MainActivity, recorder service, boot receiver and current project docs.
+- Found a stale `ShizukuDiagnostics.kt` source stub whose comment referenced a Shizuku UserService. Deleted the obsolete file; no Shizuku dependency or integration was added.
+- Added `DEVICE_TELEMETRY_ARCHITECTURE.md` with a device-wide capability matrix, public API / user-granted / best-effort / privileged classification, system-history import strategy, data-quality contract, local DB/export design, target-device census and implementation phases.
+- Research identified UsageStatsManager app events/aggregates, NetworkStatsManager UID network buckets, StorageStatsManager per-package storage, PowerManager thermal status/headroom, ActivityManager memory information and SensorManager runtime inventory as useful sources to implement. BatteryStats full system history/per-UID battery energy remains privileged.
+- Official Realme specification confirms Helio G95, Mali-G76 MC4, 4500 mAh typical / 4400 mAh minimum battery, 65 W SuperDart and sensor/radio categories. It does not establish which internal Android 12 kernel telemetry is exposed to this ordinary app.
+- Removed MainActivity Start/Stop buttons and their handlers. App resume now requests recorder startup automatically. Recorder service no longer exposes a Stop action and ignores duplicate start requests while already running.
+- Boot receiver now requests recorder recovery after BOOT_COMPLETED and MY_PACKAGE_REPLACED without checking the former user-enabled preference. Manifest declares both broadcasts.
+- Updated README, audit, project status, development handoff and changelog to distinguish implemented source from the device-wide roadmap.
+- Not yet verified: Gradle compilation, unit tests, Android CI run, APK artifact/signature, automatic startup on first launch, reboot resume, Realme battery-management behavior or multi-day screen-off continuity. No APK is declared ready.
+- Next: static review all lifecycle edits and API collector integration points; inspect exact Android CI run; implement capability registry/device census, then UsageStats/NetworkStats/StorageStats imports in separate tested phases.
