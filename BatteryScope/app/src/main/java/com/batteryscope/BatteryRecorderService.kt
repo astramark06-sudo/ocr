@@ -46,6 +46,7 @@ class BatteryRecorderService : Service() {
     private var foregroundPackage: String? = null
     private var lastSampleState: String? = null
     private var lastSamplePlug: String? = null
+    private var lastBatteryPercentStatus: String? = null
     private val lastBatteryPropertyStatus = mutableMapOf<Int, String>()
     private var lastSysfsReadMs = 0L
     private var lastSysfsJson = JSONObject()
@@ -194,7 +195,7 @@ class BatteryRecorderService : Service() {
         val now = System.currentTimeMillis()
         val elapsed = SystemClock.elapsedRealtime()
         val bootCount = try { Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1).takeIf { it >= 0 } } catch (_: Throwable) { null }
-        val intent = batteryIntent ?: registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val intent = batteryIntent ?: registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)).also { batteryIntent = it }
         val level = intent?.extras?.let {
             if (it.containsKey(BatteryManager.EXTRA_LEVEL)) it.getInt(BatteryManager.EXTRA_LEVEL, -1) else -1
         } ?: -1
@@ -202,6 +203,19 @@ class BatteryRecorderService : Service() {
             if (it.containsKey(BatteryManager.EXTRA_SCALE)) it.getInt(BatteryManager.EXTRA_SCALE, -1) else -1
         } ?: -1
         val percent = BatteryPercentMath.percent(level, scale)
+        val percentStatus = when {
+            intent == null -> "ACTION_BATTERY_CHANGED_UNAVAILABLE"
+            !intent.hasExtra(BatteryManager.EXTRA_LEVEL) -> "EXTRA_LEVEL_MISSING"
+            !intent.hasExtra(BatteryManager.EXTRA_SCALE) -> "EXTRA_SCALE_MISSING"
+            level < 0 -> "EXTRA_LEVEL_INVALID"
+            scale <= 0 -> "EXTRA_SCALE_NON_POSITIVE"
+            level > scale -> "EXTRA_LEVEL_EXCEEDS_SCALE"
+            else -> "AVAILABLE"
+        }
+        if (lastBatteryPercentStatus != percentStatus) {
+            event("BATTERY_PERCENT_METADATA", percentStatus)
+            lastBatteryPercentStatus = percentStatus
+        }
         val voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
         val temperature = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
         val statusCode = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
