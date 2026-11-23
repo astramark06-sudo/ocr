@@ -73,6 +73,7 @@ class MainActivity : Activity() {
         val maxChargingCurrentUa: Int?,
         val maxChargingVoltageUv: Int?,
         val batteryPresent: Boolean?,
+        val invalidCharger: Int?,
         val cycleCount: Int?,
         val supplies: Map<String, String>,
         val supplyRootReadable: Boolean
@@ -458,6 +459,7 @@ class MainActivity : Activity() {
             maxChargingCurrentUa = intent?.getIntExtra("max_charging_current", -1)?.takeIf { it > 0 },
             maxChargingVoltageUv = intent?.getIntExtra("max_charging_voltage", -1)?.takeIf { it > 0 },
             batteryPresent = intent?.extras?.let { if (it.containsKey("present")) it.getBoolean("present") else null },
+            invalidCharger = intent?.extras?.let { if (it.containsKey("invalid_charger")) it.getInt("invalid_charger") else null },
             cycleCount = intent?.getIntExtra("cycle_count", -1)?.takeIf { it >= 0 },
             supplies = supplies,
             supplyRootReadable = readable
@@ -508,6 +510,7 @@ class MainActivity : Activity() {
             appendLine("Android battery health ${reading.health} (framework status; not capacity health)")
             appendLine("Technology             ${reading.technology}")
             appendLine("Battery present        ${reading.batteryPresent?.toString() ?: "NOT REPORTED"}")
+            appendLine("Invalid charger flag   ${reading.invalidCharger?.let { if (it != 0) "YES ($it)" else "NO (0)" } ?: "NOT REPORTED BY FRAMEWORK"}")
             appendLine("Charge cycle count     ${reading.cycleCount?.toString() ?: kernelCycleCount?.toString() ?: "NOT EXPOSED"}")
             appendLine("Kernel charge_full     ${kernelFullChargeUah?.let { String.format(Locale.US, "%.1f mAh (raw µAh)", it / 1000.0) } ?: "NOT EXPOSED"}")
             appendLine("Kernel design capacity ${kernelDesignChargeUah?.let { String.format(Locale.US, "%.1f mAh (raw µAh)", it / 1000.0) } ?: "NOT EXPOSED"}")
@@ -540,6 +543,7 @@ class MainActivity : Activity() {
             appendLine("Instantaneous battery current: ${reading.currentUa?.let { "available (${it} µA)" } ?: "unavailable — BATTERY_PROPERTY_CURRENT_NOW returned Android's unavailable sentinel or failed"}")
             appendLine("Average battery current: ${reading.averageCurrentUa?.let { "available (${it} µA)" } ?: "unavailable — BATTERY_PROPERTY_CURRENT_AVERAGE not exposed or unsupported"}")
             appendLine("Battery energy counter: ${reading.energyNwh?.let { "available (${it} nWh)" } ?: "unavailable — ENERGY_COUNTER not exposed or unsupported"}")
+            appendLine("Invalid charger status: ${reading.invalidCharger?.let { if (it != 0) "framework reports invalid charger ($it)" else "framework reports no invalid-charger flag" } ?: "extra not supplied by Android/ROM"}")
             appendLine("Charger advertised maximum current/voltage: ${if (reading.maxChargingCurrentUa != null || reading.maxChargingVoltageUv != null) "partially or fully reported in ACTION_BATTERY_CHANGED" else "not supplied by Android/charger; live USB input V/I may require restricted kernel driver nodes"}")
             appendLine("Battery cycle count: ${reading.cycleCount?.let { "Android extra=$it" } ?: kernelCycleCount?.let { "kernel power_supply=$it" } ?: "not exposed by Android extra or readable battery/BMS sysfs nodes"}")
             appendLine("Kernel FCC/design-capacity pair: ${if (kernelFullChargeUah != null && kernelDesignChargeUah != null) "available; health estimate " + String.format(Locale.US, "%.1f%%", kernelHealthPercent) else "unavailable — one or both charge_full / charge_full_design attributes are not readable or not exported"}")
