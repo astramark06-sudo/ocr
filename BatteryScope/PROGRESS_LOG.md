@@ -111,3 +111,12 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Each session now estimates remaining time to 100% or 0% using its own display-on and display-off rates, while suppressing forecasts when the overall session direction is inconsistent or the threshold is already reached.
 - Display state is explicitly a usage proxy, not proof of active touch interaction. Foreground-app UsageStats correlation remains a separate approximate metric.
 - Source version remains 1.14 / versionCode 15; no database schema change. Full Android compile/test and device verification are still pending.
+
+
+## 2026-11-23 — Foreground-app charge-counter correlation
+
+- Per-app history now reports foreground duration, coincident SOC movement during charging, unplugged discharge and plugged-in decline.
+- When both samples have valid charge-counter readings and the counter direction agrees, the app report also shows the associated remaining-charge-counter change in mAh for each condition.
+- Attribution is intentionally limited to intervals where the same package is foreground at both sample endpoints and the display is on. These values are temporal correlation, not direct per-app electrical energy or proof of causation.
+- Missing charge-counter intervals remain `n/a`; no per-app mAh is fabricated.
+- No database schema change. Android build/test and physical handset verification remain pending.
