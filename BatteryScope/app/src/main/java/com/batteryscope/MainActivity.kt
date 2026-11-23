@@ -439,7 +439,7 @@ class MainActivity : Activity() {
         val scale = intent?.extras?.let {
             if (it.containsKey(BatteryManager.EXTRA_SCALE)) it.getInt(BatteryManager.EXTRA_SCALE, -1) else -1
         } ?: -1
-        val percent = if (level >= 0 && scale > 0) (level * 100 / scale) else null
+        val percent = BatteryPercentMath.percent(level, scale)
         val rawVoltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
         val rawTemp = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
         val temp = if (rawTemp in 0..1000) rawTemp / 10.0 else null
