@@ -1,4 +1,10 @@
-# BatteryScope 1.7 — Realme Narzo 20 Pro (RMX2161)
+# BatteryScope 1.9 — Realme Narzo 20 Pro (RMX2161)
+
+## 1.9 measurement diagnosis
+
+The ordinary app process now inventories read-only attributes across `/sys/class/power_supply`, `/sys/class/typec`, `/sys/class/usb_power_delivery`, `/sys/class/dual_role_usb`, `/sys/class/usb_role`, `/sys/class/thermal` and `/sys/class/hwmon`, with a bounded attribute count. The automatic diagnosis reports which roots were visible, external power-supply entries, whether a same-supply `voltage_now` + `current_now` pair is available, configured limits separately from live measurements, and examples of denied/error reads. A plausible same-node pair is labelled a candidate until the device driver's semantics are validated; it is not automatically asserted to be a measured USB contract.
+
+The diagnosis explicitly states when ordinary-app access cannot see USB VBUS/IBUS, when no Type-C/PD class attributes are discoverable, and whether a Shizuku audit has been run. Root access is not invoked automatically and no root prompt is triggered. The expanded scan is read-only. Android BatteryManager values remain battery-side telemetry, not charger input measurements.
 
 BatteryScope is an evidence-first Android battery and charging-path diagnostic app. It shows values returned by Android and the handset's kernel, preserves source paths and raw values, and labels unavailable data as unavailable.
 
