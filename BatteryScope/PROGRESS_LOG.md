@@ -184,3 +184,14 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - The new APK workflow run `45211353283` was observed queued/in progress on that commit. Its final outcome and artifact have not yet been verified.
 - The failed run uploaded no APK: build failed before APK creation, and the artifact step explicitly reported that the APK path did not exist.
 - No APK is ready and no install/update should be attempted.
+
+
+## 2026-11-23 — First real RMX2161 history-export review
+
+- Inspected user-provided `BatteryScope_History_20261123_214733.csv`: 22 SAMPLE rows, 51 EVENT rows, 13m35.654s duration.
+- SOC 83→80%; charge counter 3,735,000→3,600,000 µAh; temperature 33.8–35.4 °C. All rows NOT_CHARGING / plug NONE; no charging session was captured.
+- Voltage column contains 3–4 despite being named mV. Source inspection confirms the dashboard expects 2,500–5,000 mV, so it rejects the recorded values and cannot derive battery-side watts.
+- Current column contains 14–674 (mean 201.9) while source labels it µA and divides by 1,000 for mA. The charge-counter endpoint delta implies approximately 595.8 mA average, but the counter is quantized in 45,000 µAh steps. Unit semantics are unresolved; no automatic ×1,000 conversion is justified.
+- Average current, energy counter, cycle count, charger-advertised limits and USB V/I candidates were null. Usage Access was disabled for 20/22 samples. One interval was 154.741 s; average interval 38.84 s. Kernel paths returned denied/absent-hidden diagnostics and zero captured fields.
+- Confirmed: local recording and CSV export operate. Not confirmed: unit correctness, power calculation, USB input watts, long-run continuity or full device-wide telemetry.
+- Next: retain raw values, add explicit unit/scale diagnostics, and validate against a controlled charging capture and independent reference before changing conversions.
