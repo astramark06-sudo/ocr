@@ -37,14 +37,14 @@ The persistent recorder is a best-effort Android foreground service, not a hard 
 - The only write path remains the narrowly gated Oplus cool_down property, with model/path/range/charging/write/confirmation/read-back checks.
 
 ## Verification state
-- Current source revision before the v1.12 patch: 4db9f0a2a914d5c80c14a94a1e3a5c41368e8fd2 (v1.11 / versionCode 12).
-- The v1.11 source had a verified GitHub Actions debug build: run #162 / ID 45146583835. Android 35 compilation and aapt package/metadata verification passed.
-- The v1.11 artifact archive digest was sha256:9e456d07ffdb3cab2b9a77c071648d05582111fb9ee1d38948501fd2d266f33d. This is the ZIP digest, not the APK's internal SHA-256.
+- Current BatteryScope code revision: a196728f240e5d1dc61daf8a219b10582861307c (v1.12 / versionCode 13).
+- The v1.12 source has a verified GitHub Actions debug build: run #185 / ID 45158791612. JVM unit tests, Android 35 debug compilation and aapt package/metadata verification all passed.
+- Verified v1.12 artifact: `BatteryScope-1.12-debug-a196728f240e5d1dc61daf8a219b10582861307c`. APK size: 952,414 bytes. APK SHA-256: `b25b9f5c22f8dc9499a7ee1636e4bd4893634e695ce633d7d6c526b49dd02240`. ZIP SHA-256: `70fe82c9e0c003cd7d4cb5b95ec12e2250ce90c0c8c897df35b0e89c3ba811d3`. ZIP integrity and its two expected entries (APK and BUILD-INFO.txt) were verified after download.
 - The source audit found a CSV record-terminator defect, inconsistent wall-clock use in session screen-on duration, and a reboot-boundary ambiguity when post-reboot uptime exceeded the previous uptime. Version 1.12 centralizes CSV encoding, adds JVM unit tests, persists Android BOOT_COUNT with a non-destructive SQLite v1-to-v2 migration, and uses monotonic intervals within a boot and wall-clock intervals across boots.
-- CI now runs testDebugUnitTest before assembleDebug. The v1.12 CI result and artifact must be checked against the final commit before distribution.
+- CI now runs testDebugUnitTest before assembleDebug. The final v1.12 artifact was downloaded and independently checked for ZIP integrity, APK presence, file size and SHA-256.
 - No APK has been installed or runtime-tested on the physical RMX2161.
 - No actual RMX2161 VBUS/IBUS source path or current-limit writeability is verified without a handset audit.
-- No Android instrumentation/device test suite exists yet; JVM tests cover CSV row encoding only.
+- No Android instrumentation/device test suite exists yet; JVM tests cover CSV row encoding and reboot-aware interval arithmetic.
 
 ## Remaining device validation
 1. Install the final APK over the earlier package and confirm application ID/update compatibility.
