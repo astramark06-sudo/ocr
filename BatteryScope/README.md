@@ -25,7 +25,7 @@ The Battery Health panel estimates current full-charge capacity from recorded An
 
 - Original design capacity used for this handset: 4,500 mAh.
 - The estimator examines up to 90 days of local recorder history.
-- A session is considered only when it is continuous within one boot, has valid percentage and charge-counter readings, changes by at least 12 percentage points, and the charge-counter direction agrees with the percentage change.
+- A session is considered only when Android exposes a boot count, the samples remain continuous within that boot, percentage and charge-counter readings are valid, the session changes by at least 12 percentage points, and the charge-counter direction agrees with the percentage change.
 - The app takes the median of valid session estimates and reports session count, spread and a qualitative confidence level.
 - Health percentage is estimated capacity divided by 4,500 mAh. It is not clamped to 100%; a result above 100% indicates estimation variance, not a larger guaranteed battery.
 - If the handset does not expose a usable charge counter, the app reports that capacity is not measurable rather than inventing a value.
