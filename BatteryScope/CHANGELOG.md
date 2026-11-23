@@ -109,4 +109,14 @@ All versions are debug APK development builds unless a signed release is explici
 - Charge-counter endpoint movement implies ~595.8 mA average, but 45,000 µAh quantization and OEM/API unit uncertainty prevent a safe inferred multiplier.
 - No charging session was present; USB input watts remain unvalidated. Average current, energy counter, cycle count, charger limits and USB V/I candidates were unavailable.
 - No source conversion changed in this update. Raw values are preserved; calibration/semantic validation is required before correcting units.
-\n\n## 1.15 — measurement quality and event chronology (2026-11-23)\n\n- Added explicit validation for BatteryManager current polarity and battery-voltage millivolt range before calculating or displaying battery-side watts. Raw API values are retained; no sign inversion or unit multiplier is guessed.\n- Added recorder events when current/voltage measurement quality changes.\n- Simplified the main battery panel so battery level, state/source, voltage, current, battery-side power and charger-input availability are immediately visible; detailed telemetry remains in diagnostics.\n- Preserved original UsageStats foreground event timestamps rather than stamping events at poll time.\n- Added eight JVM tests covering current direction, ambiguous states, voltage range and guarded battery-side power.\n- Bumped versionName to 1.15 and versionCode to 16. Package ID and SQLite schema v4 are unchanged.\n- Physical RMX2161 validation remains required; charger-input watts and device-wide collectors are not claimed as implemented.\n
+
+
+## 1.15 — measurement quality and event chronology (2026-11-23)
+
+- Added explicit validation for BatteryManager current polarity and battery-voltage millivolt range before calculating or displaying battery-side watts. Raw API values are retained; no sign inversion or unit multiplier is guessed.
+- Added recorder events when current/voltage measurement quality changes.
+- Simplified the main battery panel so battery level, state/source, voltage, current, battery-side power and charger-input availability are immediately visible; detailed telemetry remains in diagnostics.
+- Preserved original UsageStats foreground event timestamps rather than stamping events at poll time.
+- Added eight JVM tests covering current direction, ambiguous states, voltage range and guarded battery-side power.
+- Bumped versionName to 1.15 and versionCode to 16. Package ID and SQLite schema v4 are unchanged.
+- Physical RMX2161 validation remains required; charger-input watts and device-wide collectors are not claimed as implemented.
