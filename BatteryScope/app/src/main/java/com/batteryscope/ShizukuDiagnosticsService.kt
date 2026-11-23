@@ -69,6 +69,11 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
             setOf("name", "temp1_input", "curr1_input", "in1_input", "power1_input"), 2,
             discoverAll = true, maxFiles = 300)
         appendLine()
+        appendSection("USB BUS DEVICE DESCRIPTORS (SERIAL NUMBERS EXCLUDED)", File("/sys/bus/usb/devices"),
+            setOf("idVendor", "idProduct", "bcdDevice", "manufacturer", "product",
+                "bDeviceClass", "bDeviceSubClass", "bDeviceProtocol", "speed", "authorized"),
+            2, discoverAll = false, maxFiles = 120)
+        appendLine()
         appendSection("ANDROID FRAMEWORK: dumpsys battery", null, emptySet(), 0, "dumpsys battery")
         appendLine()
         appendSection("ANDROID FRAMEWORK: dumpsys usb", null, emptySet(), 0, "dumpsys usb")
@@ -125,6 +130,9 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
         appendQuickSection("HARDWARE MONITOR SENSORS", File("/sys/class/hwmon"),
             setOf("name", "temp1_input", "curr1_input", "in1_input", "power1_input"), 2,
             discoverAll = true)
+        appendQuickSection("USB BUS DEVICE DESCRIPTORS (SERIAL NUMBERS EXCLUDED)", File("/sys/bus/usb/devices"),
+            setOf("idVendor", "idProduct", "bcdDevice", "manufacturer", "product",
+                "bDeviceClass", "bDeviceSubClass", "bDeviceProtocol", "speed", "authorized"), 2)
         appendLine("Poll type: live sysfs snapshot; not a packet capture or electrical waveform.")
     }
 
@@ -152,7 +160,7 @@ class ShizukuDiagnosticsService : IBatteryDiagnosticsService.Stub() {
                 if (count >= 160) break
                 if (child.isDirectory) {
                     if (child.name !in SYSFS_LINK_DIRS_TO_SKIP) walk(child, depth + 1)
-                } else if (child.isFile && (discoverAll || child.name in allowed)) {
+                } else if (child.isFile && child.name != "serial" && (discoverAll || child.name in allowed)) {
                     count++
                     appendLine("${child.path} = ${readOneLine(child)}  [${if (child.canRead()) "READ" else "DENIED"}]")
                 }
