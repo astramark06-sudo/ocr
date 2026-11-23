@@ -67,6 +67,10 @@ class MainActivity : Activity() {
         val plugged: String,
         val health: String,
         val technology: String,
+        val maxChargingCurrentUa: Int?,
+        val maxChargingVoltageUv: Int?,
+        val batteryPresent: Boolean?,
+        val cycleCount: Int?,
         val supplies: Map<String, String>,
         val supplyRootReadable: Boolean
     )
@@ -419,6 +423,10 @@ class MainActivity : Activity() {
             plugged = plugged,
             health = health,
             technology = technology,
+            maxChargingCurrentUa = intent?.getIntExtra("max_charging_current", -1)?.takeIf { it > 0 },
+            maxChargingVoltageUv = intent?.getIntExtra("max_charging_voltage", -1)?.takeIf { it > 0 },
+            batteryPresent = intent?.extras?.getBoolean("present"),
+            cycleCount = intent?.getIntExtra("cycle_count", -1)?.takeIf { it >= 0 },
             supplies = supplies,
             supplyRootReadable = readable
         )
@@ -481,6 +489,12 @@ class MainActivity : Activity() {
             appendLine("Android plug type: ${reading.plugged}")
             appendLine("Kernel external online flags: ${onlineNodes.joinToString().ifBlank { "not observed by app UID" }}")
             appendLine("Ordinary app sysfs: ${if (reading.supplyRootReadable) "directory visible; individual files may still be denied" else "not visible"}")
+            appendLine("Android charge counter: ${reading.chargeCounterUah?.let { "available (${it} µAh)" } ?: "unavailable — fuel-gauge property unsupported, withheld or not exposed by this ROM"}")
+            appendLine("Instantaneous battery current: ${reading.currentUa?.let { "available (${it} µA)" } ?: "unavailable — BATTERY_PROPERTY_CURRENT_NOW returned Android's unavailable sentinel or failed"}")
+            appendLine("Average battery current: ${reading.averageCurrentUa?.let { "available (${it} µA)" } ?: "unavailable — BATTERY_PROPERTY_CURRENT_AVERAGE not exposed or unsupported"}")
+            appendLine("Battery energy counter: ${reading.energyNwh?.let { "available (${it} nWh)" } ?: "unavailable — ENERGY_COUNTER not exposed or unsupported"}")
+            appendLine("Charger advertised maximum current/voltage: ${if (reading.maxChargingCurrentUa != null || reading.maxChargingVoltageUv != null) "partially or fully reported in ACTION_BATTERY_CHANGED" else "not supplied by Android/charger; live USB input V/I may require restricted kernel driver nodes"}")
+            appendLine("Battery cycle count: ${reading.cycleCount?.let { "reported: $it" } ?: "not exposed by this Android 12 build/fuel gauge; no reliable standard fallback"}")
             appendLine("Control writes: NEVER PERFORMED")
             appendLine()
             append(buildMeasurementDiagnosis(reading.supplies, reading.supplyRootReadable))
