@@ -2,12 +2,14 @@ package com.batteryscope
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.AppOpsManager
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.BatteryManager
+import android.os.Process
 import android.os.HandlerThread
 import java.util.concurrent.atomic.AtomicBoolean
 import android.os.Build
@@ -270,7 +272,7 @@ class MainActivity : Activity() {
         for ((prefix, rootPath) in roots) {
             val root = File(rootPath)
             if (!root.exists()) {
-                result["@diagnostic/" + prefix + "/root"] = "NOT_PRESENT"
+                result["@diagnostic/" + prefix + "/root"] = "ABSENT_OR_HIDDEN_BY_SELINUX"
                 continue
             }
             val dirs = try { root.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null }
@@ -317,6 +319,13 @@ class MainActivity : Activity() {
         val lines = mutableListOf<String>()
         lines += "AUTOMATIC MEASUREMENT ACCESS DIAGNOSIS"
         lines += "Power-supply root: " + if (powerSupplyRootVisible) "visible" else "not visible / not enumerable"
+        val rootChecks = nodes.filterKeys { it.startsWith("@diagnostic/") && it.endsWith("/root") }
+        if (rootChecks.isNotEmpty()) {
+            lines += "Kernel class-root access results:"
+            rootChecks.toSortedMap().forEach { (key, value) -> lines += "  ${key.removePrefix("@diagnostic/")} = $value" }
+        }
+        lines += "Foreground-app attribution permission: " + if (hasUsageAccessNow()) "GRANTED; foreground-time correlation available" else "NOT GRANTED; app-specific foreground correlation unavailable"
+        lines += "Battery sampling source: ACTION_BATTERY_CHANGED + BatteryManager public properties; unavailable sentinels are retained as unavailable"
         val nonSupplyRoots = setOf("typec", "usb_power_delivery", "dual_role_usb", "usb_role", "thermal", "hwmon", "@diagnostic")
         val supplies = nodes.keys.filter { !it.startsWith("@") && it.substringBefore("/") !in nonSupplyRoots }
             .map { it.substringBefore("/") }.distinct()
@@ -520,6 +529,17 @@ class MainActivity : Activity() {
         }
         }
     }
+
+    private fun hasUsageAccessNow(): Boolean = try {
+        val ops = getSystemService(APP_OPS_SERVICE) as AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= 29) {
+            ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
+        }
+        mode == AppOpsManager.MODE_ALLOWED
+    } catch (_: Throwable) { false }
 
     private fun formatSupplyValue(key: String, raw: String): String {
         val field = key.substringAfter('/')
