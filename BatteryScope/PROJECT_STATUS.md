@@ -40,7 +40,7 @@ The persistent recorder is a best-effort Android foreground service, not a hard 
 - Current source revision before the v1.12 patch: 4db9f0a2a914d5c80c14a94a1e3a5c41368e8fd2 (v1.11 / versionCode 12).
 - The v1.11 source had a verified GitHub Actions debug build: run #162 / ID 45146583835. Android 35 compilation and aapt package/metadata verification passed.
 - The v1.11 artifact archive digest was sha256:9e456d07ffdb3cab2b9a77c071648d05582111fb9ee1d38948501fd2d266f33d. This is the ZIP digest, not the APK's internal SHA-256.
-- The source audit found a CSV record-terminator defect and inconsistent wall-clock use in session screen-on duration. Version 1.12 centralizes CSV encoding, adds JVM unit tests and aligns screen-on interval calculation with monotonic-aware session duration.
+- The source audit found a CSV record-terminator defect, inconsistent wall-clock use in session screen-on duration, and a reboot-boundary ambiguity when post-reboot uptime exceeded the previous uptime. Version 1.12 centralizes CSV encoding, adds JVM unit tests, persists Android BOOT_COUNT with a non-destructive SQLite v1-to-v2 migration, and uses monotonic intervals within a boot and wall-clock intervals across boots.
 - CI now runs testDebugUnitTest before assembleDebug. The v1.12 CI result and artifact must be checked against the final commit before distribution.
 - No APK has been installed or runtime-tested on the physical RMX2161.
 - No actual RMX2161 VBUS/IBUS source path or current-limit writeability is verified without a handset audit.
