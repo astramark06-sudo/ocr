@@ -89,10 +89,6 @@ class BatteryRecorderService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopRecorder()
-            return START_NOT_STICKY
-        }
         if (intent?.action == ACTION_RECONFIGURE) {
             if (recorderRunning) {
                 val keepAwake = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_KEEP_CPU_AWAKE, true)
@@ -100,6 +96,10 @@ class BatteryRecorderService : Service() {
                 startAsForeground()
                 event("SAMPLING_MODE_CHANGED", if (keepAwake) "Continuous sampling: partial CPU wake lock enabled" else "Low-impact sampling: partial CPU wake lock released; screen-off gaps may occur")
             }
+            return START_STICKY
+        }
+        if (recorderRunning) {
+            startAsForeground()
             return START_STICKY
         }
         try {
@@ -504,21 +504,6 @@ class BatteryRecorderService : Service() {
         }
     }
 
-    private fun stopRecorder() {
-        recorderRunning = false
-        handler.removeCallbacks(sampler)
-        releaseSamplingWakeLock()
-        event("RECORDER_STOPPED", "Stopped by user")
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putBoolean(KEY_ACTIVE, false).putBoolean(KEY_USER_ENABLED, false).apply()
-        if (receiverRegistered) {
-            try { unregisterReceiver(receiver) } catch (_: Throwable) { }
-            receiverRegistered = false
-        }
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Keep recording after the UI task is swiped away.
         super.onTaskRemoved(rootIntent)
@@ -553,7 +538,6 @@ class BatteryRecorderService : Service() {
 
     companion object {
         const val ACTION_START = "com.batteryscope.action.START_RECORDER"
-        const val ACTION_STOP = "com.batteryscope.action.STOP_RECORDER"
         const val PREFS = "batteryscope_recorder"
         const val KEY_ACTIVE = "recorder_active"
         const val KEY_USER_ENABLED = "recorder_user_enabled"
