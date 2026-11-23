@@ -257,7 +257,7 @@ class MainActivity : Activity() {
     /** Enumerates read-only kernel power, USB-C, PD, thermal and hwmon class attributes. */
     private fun readSupplyNodes(): Pair<Map<String, String>, Boolean> {
         val now = System.currentTimeMillis()
-        // BatteryManager is refreshed every second; sysfs directory traversal is not.
+        // BatteryManager refreshes on the dashboard cadence; sysfs traversal is separately cached.
         if (supplyScanCompletedAtMs > 0L && now >= supplyScanCompletedAtMs &&
             now - supplyScanCompletedAtMs < SYSFS_UI_REFRESH_MS) {
             return cachedSupplyNodes to cachedSupplyRootVisible
