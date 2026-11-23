@@ -23,6 +23,7 @@ Package: `com.batteryscope`
 ### Live telemetry
 - Android battery percentage, status, plugged source, voltage, temperature, health enum, technology.
 - BatteryManager instantaneous and average battery-side current, charge counter and energy counter.
+- Charger-advertised maximum current/voltage, battery-present state and optional cycle-count metadata when Android/OEM extras expose them.
 - Battery-side power estimate only when voltage/current are plausible; never label this as USB input power.
 - Best-effort charger-advertised maximum current/voltage, battery-present and optional cycle-count extras.
 - Read-only inventory of power_supply, Type-C, USB-PD, USB role, thermal, hwmon and selected non-serial USB descriptor attributes.
@@ -37,6 +38,7 @@ Package: `com.batteryscope`
 - Screen-on/off and power-connected/disconnected/battery-state events.
 - Optional UsageStats foreground-package correlation when user grants Usage Access.
 - 24-hour, 7-day, 30-day, 90-day, 365-day and all-time summaries.
+- Battery-side charge-counter mA rates and screen-state-specific historical charge/discharge projections.
 - Percentage-point/hour and charge-counter-derived mA charge/discharge rates.
 - Screen-on versus screen-off charge/discharge rates.
 - Battery decline while charger remains connected.
@@ -66,6 +68,7 @@ Package: `com.batteryscope`
 ## Next engineering priorities
 
 1. Build and test version 1.14 on GitHub Actions; repair all compiler/test failures before APK delivery.
+2. Check that the CSV header, sample field list and event row have exactly aligned columns after schema v3.
 2. Audit MainActivity and recorder for any remaining main-thread I/O, races, lifecycle crashes or unbounded work.
 3. Review schema-v3 migration from v1 and v2 databases, CSV header/row alignment, and large-history performance.
 4. Add focused JVM tests for rate math, session splitting, charging-while-plugged decline, screen-state projections, and migration/CSV invariants where testable.
