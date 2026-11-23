@@ -293,13 +293,13 @@ class BatteryRecorderService : Service() {
                 try {
                     lastSysfsJson.put("@shizuku_snapshot", privileged.snapshotLink())
                     if (now - lastFullAuditMs >= FULL_AUDIT_INTERVAL_MS) {
-                        val audit = privileged.scan()
+                        val audit = privileged.snapshotBatteryStats()
                         val storedAudit = if (audit.length > MAX_AUDIT_CHARS) {
                             audit.take(MAX_AUDIT_CHARS) + "\n[TRUNCATED at " + MAX_AUDIT_CHARS + " characters]"
                         } else audit
-                        lastSysfsJson.put("@shizuku_full_audit", storedAudit)
+                        lastSysfsJson.put("@shizuku_batterystats_charged", storedAudit)
                         lastFullAuditMs = now
-                        event("SHIZUKU_FULL_AUDIT_CAPTURED", "Stored read-only audit chars=" + storedAudit.length)
+                        event("SHIZUKU_BATTERYSTATS_CAPTURED", "Stored dumpsys batterystats --charged chars=" + storedAudit.length)
                     }
                 } catch (t: Throwable) {
                     lastSysfsJson.put("@shizuku_error", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
@@ -525,7 +525,7 @@ class BatteryRecorderService : Service() {
         const val KEY_USER_ENABLED = "recorder_user_enabled"
         const val SAMPLE_INTERVAL_MS = 30_000L
         private const val FULL_AUDIT_INTERVAL_MS = 15L * 60 * 1000
-        private const val MAX_AUDIT_CHARS = 100_000
+        private const val MAX_AUDIT_CHARS = 20_000
         private const val SYSFS_INTERVAL_MS = 120_000L
         private const val MAX_SYSFS_FIELDS = 180
         private const val CHANNEL_ID = "batteryscope_recorder"
