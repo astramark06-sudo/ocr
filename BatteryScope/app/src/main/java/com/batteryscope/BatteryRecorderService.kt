@@ -838,8 +838,8 @@ class RecorderDatabase(context: Context) :
             appTime.entries.sortedByDescending { it.value }.map {
                 AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0, appPluggedDrain[it.key] ?: 0.0)
             },
-            if (charge.ms > 0L) fmt(charge.chargeCounterUah / 1000.0 / hours(charge)) else "n/a",
-            if (drain.ms > 0L) fmt(drain.chargeCounterUah / 1000.0 / hours(drain)) else "n/a"
+            BatteryRateMath.counterRateMa(charge.chargeCounterUah, charge.ms)?.let { fmt(it) } ?: "n/a",
+            BatteryRateMath.counterRateMa(drain.chargeCounterUah, drain.ms)?.let { fmt(it) } ?: "n/a"
         )
     }
 
@@ -982,7 +982,7 @@ class RecorderDatabase(context: Context) :
     private fun forecastDuration(remainingPercentagePoints: Double, rateText: String): String {
         val rate = rateText.toDoubleOrNull()
         if (rate == null || rate <= 0.0 || remainingPercentagePoints <= 0.0) return "not enough matching history"
-        val ms = (remainingPercentagePoints / rate * 3_600_000.0).toLong()
+        val ms = BatteryRateMath.forecastDurationMs(remainingPercentagePoints, rate) ?: return "not enough matching history"
         return durationText(ms) + " estimated from historical average"
     }
 
