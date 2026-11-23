@@ -72,3 +72,11 @@ Start CSV logging to record Android battery telemetry. Stop & export opens Andro
 The APK is built by GitHub Actions using Java 17, Gradle 8.9 and Android SDK 35. A successful build and uploaded artifact are required before a build is called installable.
 
 See [AUDIT.md](AUDIT.md) for the source audit, units, control semantics and known limits. See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the repeatable build and validation gate.
+
+
+## Persistent battery telemetry recorder
+Version 1.10 adds an optional user-started recorder independent of the app screen. It stores raw battery samples and system/app activity events in a local SQLite database, with CSV export. Samples are taken every 30 seconds; the power-supply sysfs inventory is refreshed every two minutes. The dashboard reports rolling 24-hour, 7-day and 30-day summaries.
+
+For foreground app tracking, grant BatteryScope **Usage Access** from the app's button. This records which app was in the foreground during sampled intervals; it does not provide a direct electrical measurement of that app's battery current. The recorder shows an ongoing foreground-service notification. It can be interrupted by force-stop, device power-off, OEM process management, permission changes or unavailable hardware interfaces.
+
+For charger input readings, check the separate Shizuku audit and measurement diagnosis. USB-side voltage/current candidates are retained with their sysfs source data but must not be treated as confirmed VBUS/IBUS until the RMX2161 driver semantics are validated.
