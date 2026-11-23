@@ -492,7 +492,10 @@ class MainActivity : Activity() {
             appendLine("Android battery health ${reading.health} (framework status; not capacity health)")
             appendLine("Technology             ${reading.technology}")
             appendLine("Battery present        ${reading.batteryPresent?.toString() ?: "NOT REPORTED"}")
-            appendLine("Charge cycle count     ${reading.cycleCount?.toString() ?: "NOT EXPOSED"}")
+            appendLine("Charge cycle count     ${reading.cycleCount?.toString() ?: kernelCycleCount?.toString() ?: "NOT EXPOSED"}")
+            appendLine("Kernel charge_full     ${kernelFullChargeUah?.let { String.format(Locale.US, "%.1f mAh (raw µAh)", it / 1000.0) } ?: "NOT EXPOSED"}")
+            appendLine("Kernel design capacity ${kernelDesignChargeUah?.let { String.format(Locale.US, "%.1f mAh (raw µAh)", it / 1000.0) } ?: "NOT EXPOSED"}")
+            appendLine("Kernel gauge capacity health ${kernelHealthPercent?.let { String.format(Locale.US, "%.1f%% (charge_full / charge_full_design)", it) } ?: "UNAVAILABLE — both kernel capacity attributes are required"}")
             appendLine("Max charging current   ${reading.maxChargingCurrentUa?.let { String.format(Locale.US, "%.0f mA (%d µA)", it / 1000.0, it) } ?: "NOT REPORTED"}")
             append("Max charging voltage   ${reading.maxChargingVoltageUv?.let { String.format(Locale.US, "%.3f V (%d µV)", it / 1_000_000.0, it) } ?: "NOT REPORTED"}")
         }
@@ -505,6 +508,14 @@ class MainActivity : Activity() {
             val node = key.substringBefore('/').lowercase(Locale.US)
             node in listOf("battery", "bms", "main")
         }
+        fun batteryGaugeValue(field: String): Long? = batteryNodes.entries
+            .firstOrNull { it.key.substringAfterLast('/') == field }
+            ?.value?.toLongOrNull()
+        val kernelCycleCount = batteryGaugeValue("cycle_count")
+        val kernelFullChargeUah = batteryGaugeValue("charge_full")?.takeIf { it > 0L }
+        val kernelDesignChargeUah = batteryGaugeValue("charge_full_design")?.takeIf { it > 0L }
+        val kernelHealthPercent = if (kernelFullChargeUah != null && kernelDesignChargeUah != null)
+            kernelFullChargeUah.toDouble() / kernelDesignChargeUah.toDouble() * 100.0 else null
         val chargerReport = buildString {
             appendLine("App process sysfs access: ${if (reading.supplyRootReadable) "directory listed" else "denied / unavailable"}")
             appendLine("External power / charger nodes")
@@ -530,7 +541,8 @@ class MainActivity : Activity() {
             appendLine("Average battery current: ${reading.averageCurrentUa?.let { "available (${it} µA)" } ?: "unavailable — BATTERY_PROPERTY_CURRENT_AVERAGE not exposed or unsupported"}")
             appendLine("Battery energy counter: ${reading.energyNwh?.let { "available (${it} nWh)" } ?: "unavailable — ENERGY_COUNTER not exposed or unsupported"}")
             appendLine("Charger advertised maximum current/voltage: ${if (reading.maxChargingCurrentUa != null || reading.maxChargingVoltageUv != null) "partially or fully reported in ACTION_BATTERY_CHANGED" else "not supplied by Android/charger; live USB input V/I may require restricted kernel driver nodes"}")
-            appendLine("Battery cycle count: ${reading.cycleCount?.let { "reported: $it" } ?: "not exposed by this Android 12 build/fuel gauge; no reliable standard fallback"}")
+            appendLine("Battery cycle count: ${reading.cycleCount?.let { "Android extra=$it" } ?: kernelCycleCount?.let { "kernel power_supply=$it" } ?: "not exposed by Android extra or readable battery/BMS sysfs nodes"}")
+            appendLine("Kernel FCC/design-capacity pair: ${if (kernelFullChargeUah != null && kernelDesignChargeUah != null) "available; health estimate " + String.format(Locale.US, "%.1f%%", kernelHealthPercent) else "unavailable — one or both charge_full / charge_full_design attributes are not readable or not exported"}")
             appendLine("Control writes: NEVER PERFORMED")
             appendLine()
             append(buildMeasurementDiagnosis(reading.supplies, reading.supplyRootReadable))
