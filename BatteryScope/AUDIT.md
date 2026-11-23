@@ -289,3 +289,8 @@ The v1.11 CSV writer used a Kotlin string containing two backslashes before `n`.
 The current-session screen-on accumulator also used wall-clock timestamp differences while total session duration used the monotonic-aware interval helper. Version 1.12 uses the same interval helper for both, keeping screen-on/off duration consistent with session duration when the system wall clock is adjusted.
 
 JVM unit tests cover quoted commas, escaped quotes, embedded line breaks, empty columns and actual record termination. These tests validate the CSV encoder only; they do not replace SQLite integration or handset validation.
+
+
+## 1.12 reboot-boundary correction
+
+The prior interval helper treated any positive elapsedRealtime delta as same-boot continuity. After a reboot, the new uptime can exceed the previous boot's uptime, so this test alone could incorrectly omit powered-off time. Version 1.12 persists `Settings.Global.BOOT_COUNT` with each sample and uses elapsedRealtime only when both samples have the same known boot count. When boot counts differ, it uses wall-clock delta, which includes the reboot gap. If the boot count is unavailable, monotonic time is accepted only when it agrees with wall time within 120 seconds; otherwise the wall-clock delta is used. Existing v1 history is preserved by a SQLite schema migration that adds the nullable boot_count column.
