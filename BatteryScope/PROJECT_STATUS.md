@@ -49,7 +49,8 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 - Battery rate math unit tests cover battery-side mA calculations and SOC time forecasts.
 - Source-level checks completed: no Shizuku/privileged service references in MainActivity, recorder service, manifest or Gradle dependencies; CSV header/sample/event row alignment verified at 28 fields; isolated Kotlin arithmetic checks passed for battery-side mA and SOC forecasts.
 - Fixed a duplicate MainActivity lifecycle override that would have blocked Kotlin compilation. Recorder event writes and orderly database shutdown were moved off the Android main thread; the boot receiver no longer opens SQLite during BOOT_COMPLETED.
-- Added a dedicated GitHub Actions workflow for Android Gradle tests, debug APK assembly, package/version verification and artifact upload. Its run result for the latest branch head is not yet confirmed.
+- Added a dedicated GitHub Actions workflow for Android Gradle tests, debug APK assembly, package/version verification, APK signature/certificate reporting and artifact upload. Its run result for the latest branch head is not yet confirmed.
+- BatteryManager property diagnostics now distinguish unavailable sentinels, SecurityException and other exception classes; recorder logs access-state transitions. Missing ACTION_BATTERY_CHANGED level/voltage/temperature data is diagnosed separately.
 - Full Android Gradle build and repository JVM test suite: pending workflow verification. The local execution environment has no Android SDK/Gradle installation.
 - APK artifact, SHA-256 and signing identity for version 1.14: not yet verified.
 - No install or runtime test has been performed on the physical RMX2161.
