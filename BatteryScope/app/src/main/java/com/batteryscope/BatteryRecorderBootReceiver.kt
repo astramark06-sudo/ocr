@@ -12,20 +12,21 @@ class BatteryRecorderBootReceiver : BroadcastReceiver() {
         val prefs = context.getSharedPreferences(BatteryRecorderService.PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(BatteryRecorderService.KEY_USER_ENABLED, false)) return
         try {
+            // Do not open SQLite in BOOT_COMPLETED on Android's broadcast main thread.
+            // The service records RECORDER_RESTARTED after it reaches its worker thread.
             val start = Intent(context, BatteryRecorderService::class.java)
                 .setAction(BatteryRecorderService.ACTION_START)
-            val db = RecorderDatabase(context)
-            db.insertEvent(System.currentTimeMillis(), "BOOT_RESUME_REQUESTED", "User had left all-day recording enabled before reboot")
-            db.close()
             if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(start)
             else context.startService(start)
         } catch (t: Throwable) {
-            // Keep the user-enabled preference; record the failed attempt for diagnosis.
-            try {
-                val db = RecorderDatabase(context)
-                db.insertEvent(System.currentTimeMillis(), "BOOT_RESUME_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
-                db.close()
-            } catch (_: Throwable) { }
+            // Preserve the user's opt-in and expose the exact startup failure in diagnostics.
+            prefs.edit()
+                .putString(
+                    BatteryRecorderService.KEY_BOOT_RESUME_FAILURE,
+                    t.javaClass.simpleName + ": " + (t.message ?: "unknown")
+                )
+                .putLong(BatteryRecorderService.KEY_BOOT_RESUME_FAILURE_AT, System.currentTimeMillis())
+                .apply()
         }
     }
 }
