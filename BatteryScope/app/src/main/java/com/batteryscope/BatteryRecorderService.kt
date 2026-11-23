@@ -399,7 +399,8 @@ class BatteryRecorderService : Service() {
             "/sys/class/dual_role_usb" to 3,
             "/sys/class/usb_role" to 3,
             "/sys/class/thermal" to 3,
-            "/sys/class/hwmon" to 3
+            "/sys/class/hwmon" to 3,
+            "/sys/bus/usb/devices" to 3
         )
         val skip = setOf("device", "subsystem", "driver", "power", "firmware_node", "of_node")
         var count = 0
@@ -427,6 +428,11 @@ class BatteryRecorderService : Service() {
                     if (child.isDirectory) {
                         if (child.name !in skip) walk(child, depth + 1)
                     } else if (child.isFile) {
+                        val isUsbBus = rootPath == "/sys/bus/usb/devices"
+                        val usbDescriptorFields = setOf("idVendor", "idProduct", "bcdDevice", "manufacturer", "product",
+                            "bDeviceClass", "bDeviceSubClass", "bDeviceProtocol", "speed", "authorized")
+                        if (isUsbBus && child.name !in usbDescriptorFields) continue
+                        if (child.name.equals("serial", ignoreCase = true)) continue
                         count++
                         val value = try {
                             if (!child.canRead()) "READ_DENIED"
