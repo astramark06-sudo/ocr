@@ -103,3 +103,12 @@ BatteryStats per-app power and detailed system battery history remain privileged
 ## Resume instructions for a future ChatGPT session
 
 Read this file first, then `PROGRESS_LOG.md`, `README.md`, `AUDIT.md`, `PROJECT_STATUS.md`, `AGENTS.md`, the Gradle workflow and current branch source. Continue from the latest branch commit. Do not ask the user to restate the phone model, app name, package or no-Shizuku constraint. Do not claim a build or APK is verified until the actual workflow result/artifact has been inspected.
+
+
+## Latest user-export findings (2026-11-23)
+
+Review of `BatteryScope_History_20261123_214733.csv`: 22 samples / 51 events across 13m35.654s. SOC 83→80%; charge counter 3,735,000→3,600,000 µAh; temperature 33.8–35.4 °C. Every sample says NOT_CHARGING / NONE; therefore no charging-watt validation occurred.
+
+Critical: voltage export is 3–4 in a column named `battery_voltage_mv`; source expects 2,500–5,000 mV and currently rejects these values for live power calculation. Current export is 14–674 in `battery_current_ua` (mean 201.9), but the charge-counter endpoint delta implies roughly 595.8 mA over the whole session; counter values move in coarse 45,000 µAh steps. Do not assume whether the OEM API returns volts/millivolts or mA/µA from this file alone. Do not apply a heuristic multiplier to historical data. Preserve raw readings and add explicit raw-unit/device validation before trusting battery-side watts.
+
+Other gaps: average current, energy counter, cycle count, charger max values and USB V/I candidates were null; Usage Access was off in 20/22 samples; one sample interval was 154.741s; kernel roots were denied or absent/hidden and no fields were captured. This is a short recording, not proof of 24/7 continuity. Next: collect one unplugged discharge and one charging capture with Usage Access enabled, compare BatteryManager raw values to same-supply battery sysfs values if accessible, and independently verify voltage/current units before changing scaling. Never claim USB-input watts from battery-side values.
