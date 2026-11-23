@@ -2,10 +2,8 @@ package com.batteryscope
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.ComponentName
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -13,7 +11,6 @@ import android.os.BatteryManager
 import android.os.Build
 import android.provider.Settings
 import android.os.Bundle
-import android.os.IBinder
 import android.net.Uri
 import android.view.Gravity
 import android.widget.Button
@@ -21,7 +18,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import org.json.JSONObject
-import rikka.shizuku.Shizuku
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -32,118 +28,20 @@ class MainActivity : Activity() {
     private lateinit var batteryText: TextView
     private lateinit var chargerText: TextView
     private lateinit var diagnosticText: TextView
-    private lateinit var communicationText: TextView
-    private lateinit var liveLinkText: TextView
-    private lateinit var controlText: TextView
-    private lateinit var coolDownStatusText: TextView
     private lateinit var statusText: TextView
     private lateinit var historyText: TextView
+    private lateinit var capacityText: TextView
     private var historyUpdatedAtMs = 0L
     private var historyLoadInFlight = false
     private var exportInFlight = false
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
-    private val coolDownButtons = mutableListOf<Button>()
-    private var currentCoolDownLevel: Int? = null
-    private var coolDownNodeWritable = false
-    private var linkPollInFlight = false
-    private var activityResumed = false
-    private var latestLinkSnapshot = ""
     private var cachedSupplyNodes: Map<String, String> = emptyMap()
     private var cachedSupplyRootVisible = false
     private var supplyScanCompletedAtMs = 0L
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var pendingExportFile: File? = null
-    private var controlHistory = StringBuilder()
-    private var latestDiagnosticReport = ""
-    private var latestDiagnosticTimeMs = 0L
-    private var remoteService: IBatteryDiagnosticsService? = null
-    private var serviceBindingRequested = false
-
-    private val diagnosticArgs by lazy {
-        Shizuku.UserServiceArgs(
-            ComponentName(packageName, ShizukuDiagnosticsService::class.java.name)
-        ).daemon(false)
-            .processNameSuffix("batteryscope_diag")
-            .version(3)
-            .tag("batteryscope_readonly_diagnostics")
-    }
-
-    private val permissionListener =
-        Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-            if (requestCode == SHIZUKU_REQUEST_CODE) {
-                runOnUiThread {
-                    if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                        bindDiagnosticService()
-                    } else {
-                        setBridgeStatus("Shizuku permission denied. No privileged scan was run.")
-                    }
-                }
-            }
-        }
-
-    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
-        runOnUiThread {
-            if (::communicationText.isInitialized) {
-                setBridgeStatus("Shizuku service connected. Tap the scan button to inspect the charging path.")
-            }
-        }
-    }
-
-    private val binderDeadListener = Shizuku.OnBinderDeadListener {
-        runOnUiThread {
-            remoteService = null
-            serviceBindingRequested = false
-            handler.removeCallbacks(linkSampler)
-            if (::liveLinkText.isInitialized) liveLinkText.text = "Shizuku disconnected. Live link polling stopped."
-            if (::communicationText.isInitialized) {
-                setBridgeStatus("Shizuku service disconnected. Restart Shizuku and scan again.")
-            }
-        }
-    }
-
-    private val userServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-            remoteService = IBatteryDiagnosticsService.Stub.asInterface(binder)
-            serviceBindingRequested = false
-            runRemoteDiagnosticScan()
-            notifyRecorderShizukuEnabled()
-        }
-
-        override fun onServiceDisconnected(name: ComponentName) {
-            remoteService = null
-            serviceBindingRequested = false
-            runOnUiThread { setBridgeStatus("Diagnostic service disconnected.") }
-        }
-    }
-
-    private val linkSampler = object : Runnable {
-        override fun run() {
-            val service = remoteService ?: return
-            if (linkPollInFlight) {
-                handler.postDelayed(this, LINK_POLL_INTERVAL_MS)
-                return
-            }
-            linkPollInFlight = true
-            Thread {
-                val snapshot = try {
-                    service.snapshotLink()
-                } catch (t: Throwable) {
-                    "LIVE SNAPSHOT FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
-                }
-                runOnUiThread {
-                    linkPollInFlight = false
-                    handler.removeCallbacks(this)
-                    if (remoteService != null && activityResumed && !isFinishing) {
-                        latestLinkSnapshot = snapshot
-                        liveLinkText.text = buildLiveLinkSummary(snapshot)
-                        handler.postDelayed(this, LINK_POLL_INTERVAL_MS)
-                    }
-                }
-            }.start()
-        }
-    }
 
     private val sampler = object : Runnable {
         override fun run() {
@@ -187,29 +85,21 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         batteryManager = getSystemService(BATTERY_SERVICE) as BatteryManager
-        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
-        Shizuku.addBinderDeadListener(binderDeadListener)
-        Shizuku.addRequestPermissionResultListener(permissionListener)
         buildUi()
         refreshReadings()
-        updateShizukuAvailability()
     }
 
     override fun onResume() {
         super.onResume()
-        activityResumed = true
         handler.removeCallbacks(sampler)
         handler.post(sampler)
-        updateShizukuAvailability()
-        if (remoteService != null) startLiveLinkPolling()
         updateRecorderControls()
         refreshHistoryDisplay(true)
+        refreshCapacityDisplay()
     }
 
     override fun onPause() {
-        activityResumed = false
         handler.removeCallbacks(sampler)
-        handler.removeCallbacks(linkSampler)
         super.onPause()
     }
 
@@ -246,53 +136,11 @@ class MainActivity : Activity() {
 
         batteryText = addPanel(content, "01  BATTERY TELEMETRY  •  ANDROID FRAMEWORK")
         chargerText = addPanel(content, "02  POWER SUPPLY NODES  •  KERNEL")
-        communicationText = addPanel(content, "03  PHONE ↔ CHARGER COMMUNICATION  •  FULL AUDIT")
-        communicationText.text = "Not scanned. Start Shizuku and run the full audit for Type-C role, USB-PD capability, charger supply nodes and Oplus VOOC driver state."
-        val liveLabel = TextView(this).apply {
-            text = "LIVE POWER-PATH SAMPLE  •  2 SECOND POLL"
-            textSize = 10f
-            setTextColor(Color.rgb(123, 177, 242))
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(2, 14, 2, 7)
-        }
-        content.addView(liveLabel)
-        liveLinkText = makeText(11f, Color.rgb(230, 237, 247), true)
-        liveLinkText.text = "Waiting for Shizuku. Live USB / VOOC driver attributes are not yet available."
-        content.addView(liveLinkText)
-        controlText = addPanel(content, "04  OPLUS INPUT-CURRENT LIMITER  •  CONDITIONAL")
-        controlText.text = "Waiting for device audit. The possible control is the Oplus cool_down driver interface, not a USB-PD/VOOC protocol command."
-        coolDownStatusText = makeText(11f, Color.rgb(225, 231, 241), false)
-        content.addView(coolDownStatusText)
-        coolDownStatusText.text = "No device capability scan yet. Controls are locked."
-        val levelRows = listOf(0..3, 4..6)
-        levelRows.forEach { levels ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-            }
-            levels.forEach { level ->
-                val button = Button(this).apply {
-                    text = if (level == 0) "OEM" else "L$level"
-                    isEnabled = false
-                    setOnClickListener { confirmCoolDownChange(level) }
-                }
-                coolDownButtons.add(button)
-                row.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
-            }
-            content.addView(row)
-        }
-        val controlLegend = makeText(10f, Color.rgb(155, 170, 191), false).apply {
-            text = "Reference driver caps, normal / VOOC input current: L1 500 / 1000 mA • L2 900 / 1500 mA • L3 1200 / 2000 mA • L4 1500 / 2500 mA • L5 2000 / 3000 mA • L6 2000 / 3500 mA. These are source-code limit values, not measured draw or a negotiated charger profile. OEM resets to factory driver defaults."
-        }
-        content.addView(controlLegend)
-        diagnosticText = addPanel(content, "05  ACCESS, SOURCE & DATA QUALITY")
-        historyText = addPanel(content, "06  CHARGE / DISCHARGE HISTORY & APP USAGE")
+        diagnosticText = addPanel(content, "03  ACCESS, SOURCE & DATA QUALITY")
+        historyText = addPanel(content, "04  CHARGE / DISCHARGE HISTORY & APP USAGE")
         historyText.text = "No recorder history yet. Start the all-day recorder to build daily, weekly and monthly data."
-        val scanButton = Button(this).apply {
-            text = "Run Shizuku power-path audit"
-            setOnClickListener { startShizukuScan() }
-        }
-        content.addView(scanButton, LinearLayout.LayoutParams(-1, -2))
+        capacityText = addPanel(content, "05  BATTERY HEALTH & FULL-CHARGE CAPACITY")
+        capacityText.text = "Capacity estimate not available yet. Record several charging/discharging sessions with the recorder enabled."
 
         val note = makeText(11f, Color.rgb(155, 170, 191), false).apply {
             text = "Measurement rules: battery current is not USB input current. Only USB/charger supply nodes can report charger-side voltage/current. BatteryScope does not decode the proprietary SuperDart wire handshake or alter the selected USB protocol. The optional Oplus control is available only when the exact bounded kernel interface is present and writable."
@@ -370,363 +218,6 @@ class MainActivity : Activity() {
         parent.addView(label)
         parent.addView(body)
         return body
-    }
-
-    private fun setBridgeStatus(message: String) {
-        if (::communicationText.isInitialized) communicationText.text = message
-    }
-
-    private fun updateShizukuAvailability() {
-        if (!::communicationText.isInitialized) return
-        val running = try { Shizuku.pingBinder() } catch (_: Throwable) { false }
-        if (!running) {
-            if (latestDiagnosticReport.isBlank()) {
-                setBridgeStatus("Shizuku is not running. Install/start Shizuku using Android Wireless debugging, then run the audit. No privileged values are currently available.")
-            }
-        } else {
-            val apiVersion = try { Shizuku.getVersion() } catch (_: Throwable) { -1 }
-            setBridgeStatus("Shizuku connected • API $apiVersion. Privileged scan has not been run in this app session.")
-        }
-    }
-
-    private fun notifyRecorderShizukuEnabled() {
-        val active = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
-            .getBoolean(BatteryRecorderService.KEY_ACTIVE, false)
-        if (!active) return
-        try {
-            startService(Intent(this, BatteryRecorderService::class.java).setAction(BatteryRecorderService.ACTION_ENABLE_SHIZUKU))
-        } catch (t: Throwable) {
-            setBridgeStatus("Could not enable privileged history sampling: " + (t.message ?: "unknown"))
-        }
-    }
-
-    private fun startShizukuScan() {
-        try {
-            if (Shizuku.isPreV11()) {
-                setBridgeStatus("Unsupported Shizuku version. BatteryScope requires Shizuku API v11 or later.")
-                return
-            }
-            if (!Shizuku.pingBinder()) {
-                setBridgeStatus("Shizuku is not running. Open Shizuku, start it using Wireless debugging, then retry.")
-                return
-            }
-            if (Shizuku.getVersion() < 11) {
-                setBridgeStatus("Shizuku API is below v11, which BatteryScope requires for UserService. Update Shizuku and retry.")
-                return
-            }
-            when (Shizuku.checkSelfPermission()) {
-                PackageManager.PERMISSION_GRANTED -> bindDiagnosticService()
-                else -> {
-                    if (Shizuku.shouldShowRequestPermissionRationale()) {
-                        setBridgeStatus("Permission was denied earlier. Open Shizuku, find BatteryScope in Authorized applications, grant access, then retry.")
-                    } else {
-                        setBridgeStatus("Waiting for Shizuku permission…")
-                        Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            setBridgeStatus("Shizuku setup error: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}")
-        }
-    }
-
-    private fun bindDiagnosticService() {
-        if (serviceBindingRequested || remoteService != null) {
-            if (remoteService != null) runRemoteDiagnosticScan()
-            return
-        }
-        try {
-            serviceBindingRequested = true
-            setBridgeStatus("Starting privileged diagnostic service…")
-            Shizuku.bindUserService(diagnosticArgs, userServiceConnection)
-        } catch (t: Throwable) {
-            serviceBindingRequested = false
-            setBridgeStatus("Could not start Shizuku UserService: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}")
-        }
-    }
-
-    private fun runRemoteDiagnosticScan() {
-        val service = remoteService ?: return
-        setBridgeStatus("Reading power-supply, Type-C, USB-PD and Android USB diagnostic interfaces…")
-        Thread {
-            val report = try {
-                service.scan()
-            } catch (t: Throwable) {
-                "REMOTE SCAN FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
-            }
-            runOnUiThread {
-                latestDiagnosticReport = report
-                latestDiagnosticTimeMs = System.currentTimeMillis()
-                communicationText.text = buildCommunicationSummary(report)
-                controlText.text = buildControlSummary(report)
-                updateCoolDownControls(report)
-                liveLinkText.text = if (latestLinkSnapshot.isBlank()) {
-                    "Full audit complete. Starting live power-path polling…"
-                } else buildLiveLinkSummary(latestLinkSnapshot)
-                startLiveLinkPolling()
-                diagnosticText.text = buildString {
-                    appendLine("Shizuku service: connected")
-                    appendLine("Privileged scan: completed")
-                    appendLine("Scan timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(latestDiagnosticTimeMs))}")
-                    appendLine("Report bytes: ${report.toByteArray().size}")
-                    appendLine("Evidence classification: raw kernel/framework output; no inferred contract unless explicitly labelled")
-                    appendLine("Audit itself: read-only")
-            appendLine("Control actions: logged separately and require a confirmation plus exact-node read-back")
-                }
-            }
-        }.start()
-    }
-
-    private fun startLiveLinkPolling() {
-        if (remoteService == null || !activityResumed) return
-        handler.removeCallbacks(linkSampler)
-        handler.post(linkSampler)
-    }
-
-    private fun buildLiveLinkSummary(snapshot: String): String {
-        val timestamp = snapshot.lineSequence()
-            .firstOrNull { it.startsWith("Timestamp:") }
-            ?.substringAfter(":")?.trim()?.toLongOrNull()
-        val timeLabel = timestamp?.let {
-            SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date(it))
-        } ?: "unknown"
-        val rows = snapshot.lineSequence()
-            .filter { it.startsWith("/sys/") }
-            .take(120).toList()
-        return buildString {
-            appendLine("Last sample: $timeLabel  •  target poll: 2 seconds")
-            if (rows.isEmpty()) {
-                appendLine("No readable live power-path / Type-C / VOOC attributes were returned.")
-                appendLine("This is unavailable data, not a zero current or a confirmed inactive fast-charge state.")
-            } else {
-                rows.forEach { appendLine(it) }
-            }
-            appendLine()
-            appendLine("Provenance: raw kernel sysfs paths and values. Battery / BMS current is not USB input current.")
-            appendLine("VOOC state flags are driver state, not wire-packet capture. PDO/contract selection is shown only if the kernel explicitly exports it.")
-            appendLine("The poll is a sampled driver snapshot, not a USB protocol trace or electrical measurement at the connector.")
-        }
-    }
-
-    private fun buildCommunicationSummary(report: String): String {
-        val keys = listOf(
-            "power_role", "data_role", "port_type", "power_operation_mode", "online",
-            "usb_power_delivery_revision", "usb_typec_revision", "usb_type",
-            "real_type", "charge_type", "voltage_now", "current_now",
-            "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update", "mmi_charging_enable", "stop_charging_enable",
-            "input_current_limit", "input_voltage_limit", "source-capabilities",
-            "sink-capabilities", "maximum_current", "operational_current",
-            "voltage", "current", "power", "revision", "svid", "mode", "active"
-        )
-        val matches = report.lineSequence().filter { line ->
-            val lower = line.lowercase(Locale.US)
-            val batteryPowerSupply = Regex("/sys/class/power_supply/(battery|bms|main)/").containsMatchIn(lower)
-            val knownCommunicationPath =
-                lower.contains("/sys/class/typec/") ||
-                lower.contains("/sys/class/usb_power_delivery/") ||
-                lower.contains("/sys/class/dual_role_usb/") ||
-                lower.contains("/sys/class/usb_role/") ||
-                (lower.contains("/sys/class/power_supply/") && !batteryPowerSupply)
-            val hasProtocolField = keys.any { lower.contains(it) } ||
-                (lower.contains("type =") && lower.contains("usb"))
-            knownCommunicationPath && hasProtocolField
-        }.distinct().take(45).toList()
-
-        return buildString {
-            appendLine("LATEST POWER-PATH SNAPSHOT • tap audit again to refresh")
-            if (matches.isEmpty()) {
-                appendLine("No readable Type-C role, USB-PD, charger-type or VBUS/IBUS kernel fields were returned.")
-                appendLine("Result: link-level protocol negotiation is NOT OBSERVED by this scan.")
-            } else {
-                appendLine("The following values were read directly from kernel attributes. Paths are preserved as provenance.")
-                matches.forEach { appendLine(it) }
-            }
-            appendLine()
-            appendLine("OPLUS / VOOC DRIVER STATE")
-            val voocLines = report.lineSequence().filter { line ->
-                listOf("/fastcharger", "/fast_chg_type", "/voocchg_ing", "/charge_technology", "/adapter_fw_update", "/mmi_charging_enable", "/stop_charging_enable")
-                    .any { line.contains(it) }
-            }.toList()
-            if (voocLines.isEmpty()) {
-                appendLine("Not exposed at the scanned power-supply paths, or not readable.")
-            } else {
-                voocLines.forEach { line ->
-                    val property = line.substringBefore(" = ").substringAfterLast("/")
-                    val raw = line.substringAfter(" = ", "unknown").substringBefore("  [")
-                    val meaning = when (property) {
-                        "fastcharger" -> "Oplus VOOC fast-charge UI indicator"
-                        "fast_chg_type" -> "driver-reported charger subtype; raw enum"
-                        "voocchg_ing" -> "Oplus VOOC driver fast-charge-in-progress flag"
-                        "charge_technology" -> "vendor project enum; interpretation intentionally omitted"
-                        "adapter_fw_update" -> "adapter firmware update state; enum interpretation omitted"
-                        "mmi_charging_enable" -> "vendor charge enable state; read only, never written"
-                        "stop_charging_enable" -> "vendor stop-charge state; read only, never written"
-                        else -> "raw driver property"
-                    }
-                    appendLine("$property = $raw  [$meaning]")
-                }
-            }
-            appendLine()
-            appendLine("Interpretation limits")
-            appendLine("• BatteryScope can report only interfaces published by this phone's kernel/firmware.")
-            appendLine("• USB-PD PDO data, if present, is USB-PD evidence; it is not proof of SuperDart negotiation.")
-            appendLine("• Oplus VOOC state properties, when exposed, are driver state values, not captured electrical packets.")
-            appendLine("• USB-PD PDO values show advertised capabilities, not necessarily the selected active contract.")
-            appendLine("• The app does not transmit protocol requests or alter the negotiated profile.")
-            appendLine("• This is an on-demand snapshot, not a continuous packet trace or oscilloscope.")
-            appendLine()
-            appendLine("FULL RAW SCAN")
-            append(report)
-        }
-    }
-
-    private fun buildControlSummary(report: String): String {
-        val present = report.contains("Present: true")
-        val readable = report.contains("Readable: true")
-        val writable = report.contains("ADB-shell process canWrite(): true")
-        val identityLines = report.lineSequence().filter {
-            it.startsWith("Android model:") || it.startsWith("Android device:") ||
-                it.startsWith("Android product:") || it.startsWith("Build fingerprint:")
-        }.toList()
-        val detectedModel = identityLines.joinToString(" | ") { it.substringAfter(":").trim() }
-            .ifBlank { "UNAVAILABLE" }
-        val targetModel = identityLines.any { it.contains("RMX2161", ignoreCase = true) }
-        val current = report.lineSequence()
-            .firstOrNull { it.startsWith("Current driver level:") }
-            ?.substringAfter(":")?.trim()
-        return buildString {
-            appendLine("Detected model: ${detectedModel ?: "UNAVAILABLE"}")
-            appendLine("Target model check: ${if (targetModel) "RMX2161 MATCH" else "MISMATCH / UNVERIFIED"}")
-            appendLine("Oplus COOL_DOWN node: ${if (present) "PRESENT" else "NOT EXPOSED"}")
-            appendLine("ADB-shell read access: ${if (readable) "YES" else "NO"}")
-            appendLine("ADB-shell write access: ${if (writable) "YES (permission check only)" else "NO"}")
-            appendLine("Current driver level: ${current ?: "UNAVAILABLE"}")
-            appendLine("Accepted reference levels: 0 (restore OEM defaults), 1..6 (input-current limit steps)")
-            appendLine("No value is written during a scan.")
-            if (!targetModel) {
-                appendLine("Device identity does not match RMX2161. Charging writes are blocked.")
-            } else if (!present) {
-                appendLine("The installed kernel did not expose /sys/class/power_supply/battery/cool_down at the audited path. No control is available through this interface.")
-            } else if (!writable) {
-                appendLine("The node exists but the Shizuku process cannot write it. Shizuku is ADB-shell privilege, not root; controls remain disabled.")
-            } else if (current?.toIntOrNull()?.let { it in 0..6 } != true) {
-                appendLine("The live value is outside the source-verified 0..6 range. Controls remain disabled.")
-            } else {
-                appendLine("The bounded driver interface appears writable to this process. The app still requires an explicit confirmation, charging-state check and exact read-back after any user-requested change.")
-            }
-            appendLine()
-            appendLine("Reference driver table (normal / VOOC input cap):")
-            appendLine("L1 500 / 1000 mA; L2 900 / 1500 mA; L3 1200 / 2000 mA; L4 1500 / 2500 mA; L5 2000 / 3000 mA; L6 2000 / 3500 mA.")
-            appendLine("These are limits in the inspected RM6785 source, not measured current, USB-C voltage/current or the active negotiated contract. Installed firmware may differ.")
-            appendLine()
-            appendLine("Known unsafe Oplus control: MMI_CHARGING_ENABLE is binary charge enable/disable; its setter can turn charging off and end VOOC. It is excluded.")
-            appendLine("STOP_CHARGING_ENABLE and OTG_SWITCH are also excluded; they do not provide a safe current-rate control.")
-            appendLine("No USB-C role change, PMIC/I²C write, or raw SuperDart protocol command is available in this app.")
-        }
-    }
-
-    private fun updateCoolDownControls(report: String) {
-        val present = report.contains("Present: true")
-        val readable = report.contains("Readable: true")
-        val writable = report.contains("ADB-shell process canWrite(): true")
-        val identityLines = report.lineSequence().filter {
-            it.startsWith("Android model:") || it.startsWith("Android device:") ||
-                it.startsWith("Android product:") || it.startsWith("Build fingerprint:")
-        }.toList()
-        val detectedModel = identityLines.joinToString(" | ") { it.substringAfter(":").trim() }
-            .ifBlank { "UNAVAILABLE" }
-        val targetModel = identityLines.any { it.contains("RMX2161", ignoreCase = true) }
-        val rawLevel = report.lineSequence()
-            .firstOrNull { it.startsWith("Current driver level:") }
-            ?.substringAfter(":")?.trim()
-        val parsedLevel = rawLevel?.toIntOrNull()
-        currentCoolDownLevel = parsedLevel
-        coolDownNodeWritable = targetModel && present && readable && writable && parsedLevel?.let { it in 0..6 } == true
-        val charging = isChargingAndPlugged()
-        coolDownButtons.forEachIndexed { index, button ->
-            val level = index
-            val name = if (level == 0) "OEM" else "L$level"
-            button.text = if (parsedLevel == level) "$name ✓" else name
-            button.isEnabled = coolDownNodeWritable && charging && remoteService != null
-        }
-        coolDownStatusText.text = when {
-            !targetModel -> "LOCKED: detected model '${detectedModel ?: "unknown"}' does not match RMX2161."
-            !present -> "CONTROL UNAVAILABLE: /sys/class/power_supply/battery/cool_down is not exposed by this firmware."
-            !readable -> "CONTROL UNAVAILABLE: cooldown node is present but unreadable to Shizuku."
-            !writable -> "READ-ONLY: cooldown node is visible, but the Shizuku ADB-shell UID has no write permission. Root or an OEM privileged service would be required; controls are locked."
-            parsedLevel?.let { it in 0..6 } != true -> "LOCKED: live driver level '$rawLevel' is outside the source-verified 0..6 range."
-            !charging -> "CONTROL DETECTED BUT LOCKED: connect a charger and wait until Android reports CHARGING before applying a limit."
-            remoteService == null -> "CONTROL DETECTED BUT LOCKED: Shizuku diagnostic service is not connected. Run the audit again."
-            else -> "AVAILABLE: driver level $parsedLevel read from the exact sysfs node. Select a level only after reviewing the cap table and confirmation."
-        }
-    }
-
-    private fun isChargingAndPlugged(): Boolean {
-        val intent = batteryIntent() ?: return false
-        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-        val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
-        return status == BatteryManager.BATTERY_STATUS_CHARGING && plugged != 0
-    }
-
-    private fun confirmCoolDownChange(level: Int) {
-        val service = remoteService
-        if (service == null || !coolDownNodeWritable) {
-            coolDownStatusText.text = "LOCKED: the Shizuku service or writable driver node is unavailable."
-            return
-        }
-        if (!isChargingAndPlugged()) {
-            coolDownStatusText.text = "LOCKED: the phone must report CHARGING with an external power source attached."
-            updateCoolDownControls(latestDiagnosticReport)
-            return
-        }
-        if (level !in 0..6) return
-        if (currentCoolDownLevel == level) {
-            coolDownStatusText.text = "No change requested: driver is already at level $level."
-            return
-        }
-        val capDescription = when (level) {
-            0 -> "Restore the OEM driver defaults. This removes the manual cool_down level."
-            1 -> "Request the most restrictive reference cap: normal 500 mA / VOOC 1000 mA input."
-            2 -> "Request reference cap: normal 900 mA / VOOC 1500 mA input."
-            3 -> "Request reference cap: normal 1200 mA / VOOC 2000 mA input."
-            4 -> "Request reference cap: normal 1500 mA / VOOC 2500 mA input."
-            5 -> "Request reference cap: normal 2000 mA / VOOC 3000 mA input."
-            else -> "Request reference cap: normal 2000 mA / VOOC 3500 mA input."
-        }
-        AlertDialog.Builder(this)
-            .setTitle(if (level == 0) "Restore OEM charging limits?" else "Apply Oplus input-current limit?")
-            .setMessage(
-                "$capDescription\n\nThis changes only the driver's cool_down limit setting. It does not select a SuperDart/VOOC/USB-PD voltage profile and does not measure the current actually drawn. The phone's firmware may clamp, override or ignore the requested cap. BatteryScope will verify the exact sysfs read-back; it will not report success without that read-back.\n\nProceed?"
-            )
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Apply") { _, _ -> performCoolDownChange(level) }
-            .show()
-    }
-
-    private fun performCoolDownChange(level: Int) {
-        val service = remoteService ?: return
-        coolDownButtons.forEach { it.isEnabled = false }
-        coolDownStatusText.text = "Applying level $level through the exact Oplus driver node and checking read-back…"
-        Thread {
-            val result = try {
-                service.setCoolDown(level)
-            } catch (t: Throwable) {
-                "CONTROL CALL FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
-            }
-            runOnUiThread {
-                controlHistory.append(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
-                    .append(" | requested cool_down level=").append(level)
-                    .append(" | ").append(result).append('\n')
-                controlText.text = result
-                if (result.startsWith("READ-BACK VERIFIED:")) {
-                    coolDownStatusText.text = result
-                    runRemoteDiagnosticScan()
-                } else {
-                    coolDownStatusText.text = result
-                    coolDownButtons.forEach { it.isEnabled = false }
-                }
-            }
-        }.start()
     }
 
     private fun batteryIntent(): Intent? =
@@ -863,9 +354,7 @@ class MainActivity : Activity() {
         val denied = nodes.filterValues { it == "READ_DENIED" || it == "LIST_DENIED" || it.startsWith("ERROR:") }
         lines += "Permission / read errors: " + denied.size
         denied.entries.take(20).forEach { lines += "  " + it.key + " = " + it.value }
-        lines += "Shizuku audit: " + if (latestDiagnosticReport.isBlank()) "not run" else "available; inspect privileged UID and per-path results"
         lines += "Root: not invoked automatically; no su prompt or root write attempted."
-        lines += "ADB shell: not available to ordinary app process; Shizuku UserService is the optional shell-UID route."
         lines += "PDO capabilities, configured limits and VOOC flags are not classified as measured USB input power."
         lines += "No kernel attributes were written."
         return lines.joinToString("\n")
@@ -977,7 +466,6 @@ class MainActivity : Activity() {
             appendLine("Android plug type: ${reading.plugged}")
             appendLine("Kernel external online flags: ${onlineNodes.joinToString().ifBlank { "not observed by app UID" }}")
             appendLine("Ordinary app sysfs: ${if (reading.supplyRootReadable) "directory visible; individual files may still be denied" else "not visible"}")
-            appendLine("Shizuku audit: ${if (latestDiagnosticReport.isBlank()) "not run" else "available at ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(latestDiagnosticTimeMs))}"}")
             appendLine("Control writes: NEVER PERFORMED")
             appendLine()
             append(buildMeasurementDiagnosis(reading.supplies, reading.supplyRootReadable))
@@ -1101,6 +589,21 @@ class MainActivity : Activity() {
         }.start()
     }
 
+
+    private fun refreshCapacityDisplay() {
+        if (!::capacityText.isInitialized) return
+        Thread {
+            val report = try {
+                RecorderDatabase(applicationContext).use { it.capacityEstimateReport() }
+            } catch (t: Throwable) {
+                "Capacity estimate failed: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+            }
+            runOnUiThread {
+                if (!isFinishing && ::capacityText.isInitialized) capacityText.text = report
+            }
+        }.start()
+    }
+
     private fun exportRecorderHistory() {
         if (exportInFlight) {
             statusText.text = "A history export is already in progress."
@@ -1201,22 +704,11 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         handler.removeCallbacks(sampler)
-        handler.removeCallbacks(linkSampler)
-        Shizuku.removeBinderReceivedListener(binderReceivedListener)
-        Shizuku.removeBinderDeadListener(binderDeadListener)
-        Shizuku.removeRequestPermissionResultListener(permissionListener)
-        try {
-            if (Shizuku.pingBinder()) {
-                Shizuku.unbindUserService(diagnosticArgs, userServiceConnection, true)
-            }
-        } catch (_: Throwable) { }
         super.onDestroy()
     }
 
     companion object {
         private const val SYSFS_UI_REFRESH_MS = 15_000L
-        private const val SHIZUKU_REQUEST_CODE = 4102
-        private const val LINK_POLL_INTERVAL_MS = 2_000L
         private const val CSV_EXPORT_REQUEST_CODE = 5101
         private const val NOTIFICATION_REQUEST_CODE = 5102
     }
