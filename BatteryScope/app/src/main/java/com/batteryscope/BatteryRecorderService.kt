@@ -53,6 +53,7 @@ class BatteryRecorderService : Service() {
     private var lastFullAuditMs = 0L
     private var lastSysfsJson = JSONObject()
     private var receiverRegistered = false
+    @Volatile private var recorderRunning = false
     private var samplingWakeLock: PowerManager.WakeLock? = null
     private var privilegedService: IBatteryDiagnosticsService? = null
     private var privilegedBinding = false
@@ -103,7 +104,7 @@ class BatteryRecorderService : Service() {
         override fun run() {
             try { sample() }
             catch (t: Throwable) { event("SAMPLE_ERROR", t.javaClass.simpleName + ": " + (t.message ?: "unknown")) }
-            finally { handler.postDelayed(this, SAMPLE_INTERVAL_MS) }
+            finally { if (recorderRunning) handler.postDelayed(this, SAMPLE_INTERVAL_MS) }
         }
     }
 
@@ -122,6 +123,7 @@ class BatteryRecorderService : Service() {
         if (intent?.action == ACTION_ENABLE_SHIZUKU) {
             try {
                 startAsForeground()
+                recorderRunning = true
                 getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                     .putBoolean(KEY_ACTIVE, true).putBoolean(KEY_USER_ENABLED, true).apply()
                 acquireSamplingWakeLock()
@@ -139,6 +141,7 @@ class BatteryRecorderService : Service() {
         }
         try {
             startAsForeground()
+            recorderRunning = true
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putBoolean(KEY_ACTIVE, true).putBoolean(KEY_USER_ENABLED, true).apply()
             acquireSamplingWakeLock()
@@ -505,6 +508,7 @@ class BatteryRecorderService : Service() {
     }
 
     private fun stopRecorder() {
+        recorderRunning = false
         handler.removeCallbacks(sampler)
         releaseSamplingWakeLock()
         try {
@@ -531,6 +535,7 @@ class BatteryRecorderService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        recorderRunning = false
         handler.removeCallbacks(sampler)
         releaseSamplingWakeLock()
         try {
