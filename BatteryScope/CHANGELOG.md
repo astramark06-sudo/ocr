@@ -3,7 +3,8 @@
 ## 1.12 — CSV export integrity and session timing correction
 - Fixed CSV record terminators: exported headers, samples and events now end with actual newline characters rather than literal backslash-n text.
 - Centralized CSV row quoting/escaping and added JVM unit tests for commas, quotes, embedded line breaks and empty columns.
-- Session screen-on duration now uses the same monotonic-aware interval calculation as total session duration, avoiding disagreement when the wall clock changes.
+- Session screen-on duration and full-charge session boundaries now use the same monotonic-aware interval calculation as total session duration.
+- Persisted Android BOOT_COUNT per sample, added a non-destructive SQLite v1-to-v2 migration, and use wall-clock duration across reboot even when post-reboot uptime is larger than the previous uptime.
 - CI now runs testDebugUnitTest before assembling the APK.
 - Version code: 13.
 
