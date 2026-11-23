@@ -91,14 +91,24 @@ class BatteryRecorderService : Service() {
             stopRecorder()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_RECONFIGURE) {
+            if (recorderRunning) {
+                val keepAwake = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_KEEP_CPU_AWAKE, true)
+                if (keepAwake) acquireSamplingWakeLock() else releaseSamplingWakeLock()
+                startAsForeground()
+                event("SAMPLING_MODE_CHANGED", if (keepAwake) "Continuous sampling: partial CPU wake lock enabled" else "Low-impact sampling: partial CPU wake lock released; screen-off gaps may occur")
+            }
+            return START_STICKY
+        }
         try {
             startAsForeground()
             recorderRunning = true
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putBoolean(KEY_ACTIVE, true).putBoolean(KEY_USER_ENABLED, true).apply()
-            acquireSamplingWakeLock()
+            val keepAwake = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_KEEP_CPU_AWAKE, true)
+            if (keepAwake) acquireSamplingWakeLock() else releaseSamplingWakeLock()
             event(if (intent == null) "RECORDER_RESTARTED" else "RECORDER_STARTED",
-                "Foreground recorder; 30-second sampling; CPU partial wake lock held while recording (adds app power use)")
+                "Foreground recorder; 30-second target sampling; partial CPU wake lock=" + keepAwake + " (enabled mode adds app power use)")
             handler.removeCallbacks(sampler)
             handler.post(sampler)
         } catch (t: Throwable) {
@@ -115,7 +125,9 @@ class BatteryRecorderService : Service() {
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("BatteryScope is recording")
-            .setContentText("Telemetry active • CPU kept awake for 30-second sampling; increases app drain")
+            .setContentText(if (getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_KEEP_CPU_AWAKE, true))
+                "30-second sampling • CPU wake lock ON • adds app drain"
+            else "30-second target • CPU wake lock OFF • screen-off gaps possible")
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
             .build()
@@ -473,6 +485,8 @@ class BatteryRecorderService : Service() {
         const val PREFS = "batteryscope_recorder"
         const val KEY_ACTIVE = "recorder_active"
         const val KEY_USER_ENABLED = "recorder_user_enabled"
+        const val KEY_KEEP_CPU_AWAKE = "keep_cpu_awake"
+        const val ACTION_RECONFIGURE = "com.batteryscope.action.RECONFIGURE_RECORDER"
         const val SAMPLE_INTERVAL_MS = 30_000L
         private const val SYSFS_INTERVAL_MS = 120_000L
         private const val MAX_SYSFS_FIELDS = 900
