@@ -29,6 +29,8 @@ import android.os.Process
 import android.os.SystemClock
 import org.json.JSONObject
 import java.io.Writer
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import rikka.shizuku.Shizuku
@@ -616,6 +618,12 @@ class RecorderDatabase(context: Context) :
             appendLine("=== MOST RECENT DISCHARGING SESSION ===")
             appendLine(sessionReport(allRows, false))
             appendLine()
+            appendLine("=== RECENT CHARGING SESSIONS ===")
+            appendLine(sessionHistoryReport(allRows, true, 8))
+            appendLine()
+            appendLine("=== RECENT DISCHARGING SESSIONS ===")
+            appendLine(sessionHistoryReport(allRows, false, 8))
+            appendLine()
             appendLine("Rate intervals longer than 90 seconds are excluded. Threshold times are resolved to the sample interval, not exact hardware event times.")
             val last = readableDatabase.rawQuery(
                 "SELECT timestamp_ms,battery_percent,battery_status,plug_type,foreground_package FROM samples ORDER BY timestamp_ms DESC LIMIT 1", null
@@ -740,6 +748,57 @@ class RecorderDatabase(context: Context) :
             screenOn, screenOff,
             appTime.entries.sortedByDescending { it.value }.map { AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0) }
         )
+    }
+
+    private fun sessionHistoryReport(rows: List<Row>, wantCharge: Boolean, limit: Int): String {
+        if (rows.isEmpty()) return "No samples recorded."
+        fun matches(row: Row) = if (wantCharge) charging(row) else discharging(row)
+        val sessions = mutableListOf<List<Row>>()
+        var current = mutableListOf<Row>()
+        for (row in rows) {
+            if (matches(row)) {
+                if (current.isNotEmpty()) {
+                    val gap = row.time - current.last().time
+                    if (gap !in 1_000L..(SAMPLE_INTERVAL_MS * 3)) {
+                        sessions += current
+                        current = mutableListOf()
+                    }
+                }
+                current += row
+            } else if (current.isNotEmpty()) {
+                sessions += current
+                current = mutableListOf()
+            }
+        }
+        if (current.isNotEmpty()) sessions += current
+        if (sessions.isEmpty()) return "No recorded sessions."
+        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+        return sessions.takeLast(limit).asReversed().joinToString("\n") { run ->
+            val first = run.first()
+            val last = run.last()
+            val start = formatter.format(Date(first.time))
+            if (run.size < 2 || first.pct == null || last.pct == null) {
+                start + " • one sample only; elapsed time and rate unavailable"
+            } else {
+                val elapsed = (last.time - first.time).coerceAtLeast(0L)
+                val delta = last.pct - first.pct
+                val rate = if (elapsed > 0L) kotlin.math.abs(delta.toDouble()) / (elapsed / 3_600_000.0) else 0.0
+                val onMs = run.zipWithNext().sumOf { (a, b) ->
+                    val dt = b.time - a.time
+                    if (dt in 1_000L..(SAMPLE_INTERVAL_MS * 3) && b.screen) dt else 0L
+                }
+                val counter = if (first.chargeCounter != null && last.chargeCounter != null)
+                    (last.chargeCounter - first.chargeCounter) / 1000.0 else null
+                val state = first.pct.toString() + "%→" + last.pct + "%"
+                val counterText = if (counter == null) "mAh n/a" else String.format(Locale.US, "%+.1f mAh", counter)
+                start + " • " + state + " • " + durationText(elapsed) +
+                    " • " + String.format(Locale.US, "%.2f pp/h", rate) +
+                    " • screen ON " + durationText(onMs) +
+                    " / OFF " + durationText(elapsed - onMs) +
+                    " • " + counterText +
+                    if (wantCharge && last.state == "FULL") " • full" else ""
+            }
+        }
     }
 
     private fun sessionReport(rows: List<Row>, wantCharge: Boolean): String {
