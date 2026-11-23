@@ -380,6 +380,8 @@ class BatteryRecorderService : Service() {
             if (count >= maxFields) break
         }
         result.put("@field_count", count)
+        result.put("@field_limit", maxFields)
+        result.put("@field_limit_reached", count >= maxFields)
         if (Build.VERSION.SDK_INT >= 29) {
             try {
                 val power = getSystemService(POWER_SERVICE) as PowerManager
