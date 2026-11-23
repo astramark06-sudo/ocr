@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var historyText: TextView
     private var historyUpdatedAtMs = 0L
+    private var historyLoadInFlight = false
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private val coolDownButtons = mutableListOf<Button>()
@@ -999,17 +1000,26 @@ class MainActivity : Activity() {
     }
 
     private fun refreshHistoryDisplay(force: Boolean) {
-        if (!::historyText.isInitialized) return
+        if (!::historyText.isInitialized || historyLoadInFlight) return
         val now = System.currentTimeMillis()
         if (!force && now - historyUpdatedAtMs < 60_000L) return
         historyUpdatedAtMs = now
-        try {
-            val database = RecorderDatabase(this)
-            historyText.text = database.historySummary(now)
-            database.close()
-        } catch (t: Throwable) {
-            historyText.text = "History read failed: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
-        }
+        historyLoadInFlight = true
+        Thread {
+            var result: String
+            val database = RecorderDatabase(applicationContext)
+            result = try {
+                database.historySummary(now)
+            } catch (t: Throwable) {
+                "History read failed: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
+            } finally {
+                try { database.close() } catch (_: Throwable) { }
+            }
+            runOnUiThread {
+                historyLoadInFlight = false
+                if (!isFinishing && ::historyText.isInitialized) historyText.text = result
+            }
+        }.start()
     }
 
     private fun exportRecorderHistory() {
