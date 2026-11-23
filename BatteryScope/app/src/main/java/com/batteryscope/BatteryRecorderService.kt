@@ -664,7 +664,7 @@ class RecorderDatabase(context: Context) :
         val drainPct: String get() = String.format(Locale.US, "%.1f", drain)
         val pluggedDrainPct: String get() = String.format(Locale.US, "%.1f", pluggedDrain)
     }
-    private data class Bucket(var ms: Long = 0L, var pct: Double = 0.0, var chargeCounterUah: Long = 0L)
+    private data class Bucket(var ms: Long = 0L, var pct: Double = 0.0, var chargeCounterUah: Long = 0L, var counterIntervals: Int = 0)
     private data class Stats(
         val count: Int, val chargeHours: String, val dischargeHours: String,
         val chargedPct: String, val dischargedPct: String, val chargeRate: String, val dischargeRate: String,
@@ -757,10 +757,13 @@ class RecorderDatabase(context: Context) :
     private fun charging(row: Row) = row.state == "CHARGING"
     private fun discharging(row: Row) = row.state == "DISCHARGING"
 
-    private fun add(bucket: Bucket, duration: Long, pct: Double, counter: Long) {
+    private fun add(bucket: Bucket, duration: Long, pct: Double, counter: Long?) {
         bucket.ms += duration
         bucket.pct += pct
-        bucket.chargeCounterUah += counter
+        if (counter != null) {
+            bucket.chargeCounterUah += counter
+            bucket.counterIntervals++
+        }
     }
 
     private fun summariseSince(from: Long): Stats {
@@ -813,21 +816,23 @@ class RecorderDatabase(context: Context) :
                         if (before.pct != null && after.pct != null) {
                             val delta = (after.pct - before.pct).toDouble()
                             val counterDelta = if (before.chargeCounter != null && after.chargeCounter != null)
-                                after.chargeCounter - before.chargeCounter else 0L
+                                after.chargeCounter - before.chargeCounter else null
+                            val counterGain = counterDelta?.takeIf { it > 0L }
+                            val counterLoss = counterDelta?.takeIf { it < 0L }?.let { -it }
                             val bothPlugged = before.plug != "NONE" && after.plug != "NONE"
                             val androidReportsCharging = charging(before) && charging(after)
                             if ((bothPlugged || androidReportsCharging) && delta < 0.0) {
                                 // Some ROMs report EXTRA_PLUGGED=NONE while BATTERY_STATUS remains CHARGING.
-                                add(pluggedDrain, dt, -delta, (-counterDelta).coerceAtLeast(0L))
-                                add(if (after.screen) pluggedDrainOn else pluggedDrainOff, dt, -delta, (-counterDelta).coerceAtLeast(0L))
+                                add(pluggedDrain, dt, -delta, counterLoss)
+                                add(if (after.screen) pluggedDrainOn else pluggedDrainOff, dt, -delta, counterLoss)
                                 if (sameApp) appPluggedDrain[after.app] = (appPluggedDrain[after.app] ?: 0.0) - delta
                             } else if (charging(before) && charging(after) && delta >= 0.0) {
-                                add(charge, dt, delta, counterDelta.coerceAtLeast(0L))
-                                add(if (after.screen) chargeOn else chargeOff, dt, delta, counterDelta.coerceAtLeast(0L))
+                                add(charge, dt, delta, counterGain)
+                                add(if (after.screen) chargeOn else chargeOff, dt, delta, counterGain)
                                 if (sameApp) appCharge[after.app] = (appCharge[after.app] ?: 0.0) + delta
                             } else if (discharging(before) && discharging(after) && !bothPlugged && delta <= 0.0) {
-                                add(drain, dt, -delta, (-counterDelta).coerceAtLeast(0L))
-                                add(if (after.screen) drainOn else drainOff, dt, -delta, (-counterDelta).coerceAtLeast(0L))
+                                add(drain, dt, -delta, counterLoss)
+                                add(if (after.screen) drainOn else drainOff, dt, -delta, counterLoss)
                                 if (sameApp) appDrain[after.app] = (appDrain[after.app] ?: 0.0) - delta
                             }
                         }
@@ -842,7 +847,7 @@ class RecorderDatabase(context: Context) :
         fun rate(bucket: Bucket) = if (bucket.ms > 0L) fmt(bucket.pct / hours(bucket)) else "n/a"
         return Stats(
             count, duration(charge), duration(drain), fmt(charge.pct), fmt(drain.pct), rate(charge), rate(drain),
-            fmt(charge.chargeCounterUah / 1000.0), fmt(drain.chargeCounterUah / 1000.0),
+            if (charge.counterIntervals > 0) fmt(charge.chargeCounterUah / 1000.0) else "n/a", if (drain.counterIntervals > 0) fmt(drain.chargeCounterUah / 1000.0) else "n/a",
             duration(chargeOn), fmt(chargeOn.pct), rate(chargeOn), duration(chargeOff), fmt(chargeOff.pct), rate(chargeOff),
             duration(drainOn), fmt(drainOn.pct), rate(drainOn), duration(drainOff), fmt(drainOff.pct), rate(drainOff),
             duration(pluggedDrain), fmt(pluggedDrain.pct), rate(pluggedDrain),
@@ -852,8 +857,8 @@ class RecorderDatabase(context: Context) :
             appTime.entries.sortedByDescending { it.value }.map {
                 AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0, appPluggedDrain[it.key] ?: 0.0)
             },
-            BatteryRateMath.counterRateMa(charge.chargeCounterUah, charge.ms)?.let { fmt(it) } ?: "n/a",
-            BatteryRateMath.counterRateMa(drain.chargeCounterUah, drain.ms)?.let { fmt(it) } ?: "n/a"
+            if (charge.counterIntervals > 0) BatteryRateMath.counterRateMa(charge.chargeCounterUah, charge.ms)?.let { fmt(it) } ?: "n/a" else "n/a",
+            if (drain.counterIntervals > 0) BatteryRateMath.counterRateMa(drain.chargeCounterUah, drain.ms)?.let { fmt(it) } ?: "n/a" else "n/a"
         )
     }
 
