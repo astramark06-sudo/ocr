@@ -30,7 +30,7 @@ Package: `com.batteryscope`
 - Read-only inventory of power_supply, Type-C, USB-PD, USB role, thermal, hwmon and selected non-serial USB descriptor attributes.
 - Vendor/Oplus/VOOC fields are raw state indicators only; no proprietary handshake or protocol claims.
 - Per-root and per-file visibility/read/list diagnostics; distinguishes definitely unavailable from permission denied and absent-or-SELinux-hidden.
-- BatteryManager diagnostics distinguish unavailable sentinels, SecurityException and other exception classes for current, average current, charge counter and energy counter; missing battery broadcast/level/voltage/temperature extras are reported separately. Recorder logs property-access state transitions without writing an event every sample.
+- BatteryManager diagnostics distinguish unavailable sentinels, SecurityException and other exception classes for current, average current, charge counter and energy counter; missing battery broadcast/level/voltage/temperature extras are reported separately. Recorder logs property-access state transitions without writing an event every sample. Percentage diagnostics identify missing level vs missing scale vs invalid values.
 - Usage Access status is displayed for foreground-app correlation.
 - Live dashboard file traversal and BatteryManager reads run on a dedicated HandlerThread.
 - Recorder event writes triggered by service/broadcast callbacks are queued on the recorder HandlerThread; database close is queued after pending work to avoid main-thread SQLite stalls and dropped events.
