@@ -1,5 +1,7 @@
 package com.batteryscope
 
+import java.util.Locale
+
 /**
  * Validates BatteryManager values before presenting derived battery-side measurements.
  *
@@ -23,8 +25,8 @@ internal object BatteryMeasurementQuality {
         if (rawCurrentUa == null) return MeasurementAssessment(false, "UNAVAILABLE")
         if (rawCurrentUa == 0L) return MeasurementAssessment(false, "ZERO_OR_IDLE")
 
-        val status = batteryStatus.uppercase().replace(' ', '_')
-        val plug = plugType.uppercase()
+        val status = batteryStatus.uppercase(Locale.US).replace(' ', '_')
+        val plug = plugType.uppercase(Locale.US)
         val expectedSign = when {
             status == "CHARGING" -> 1
             status == "DISCHARGING" -> -1
