@@ -48,6 +48,9 @@ class MainActivity : Activity() {
     private var linkPollInFlight = false
     private var activityResumed = false
     private var latestLinkSnapshot = ""
+    private var cachedSupplyNodes: Map<String, String> = emptyMap()
+    private var cachedSupplyRootVisible = false
+    private var supplyScanCompletedAtMs = 0L
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var pendingExportFile: File? = null
@@ -730,68 +733,138 @@ class MainActivity : Activity() {
 
     private fun longProperty(id: Int): Long? = try {
         val value = batteryManager.getLongProperty(id)
-        if (value == Long.MIN_VALUE) null else value
+        if (value == Long.MIN_VALUE || value == Long.MAX_VALUE) null else value
     } catch (_: Throwable) {
         null
     }
 
     /** Enumerates read-only kernel power, USB-C, PD, thermal and hwmon class attributes. */
     private fun readSupplyNodes(): Pair<Map<String, String>, Boolean> {
-        val roots = linkedMapOf("power_supply" to "/sys/class/power_supply", "typec" to "/sys/class/typec", "usb_power_delivery" to "/sys/class/usb_power_delivery", "dual_role_usb" to "/sys/class/dual_role_usb", "usb_role" to "/sys/class/usb_role", "thermal" to "/sys/class/thermal", "hwmon" to "/sys/class/hwmon")
+        val now = System.currentTimeMillis()
+        // BatteryManager is refreshed every second; sysfs directory traversal is not.
+        if (supplyScanCompletedAtMs > 0L && now >= supplyScanCompletedAtMs &&
+            now - supplyScanCompletedAtMs < SYSFS_UI_REFRESH_MS) {
+            return cachedSupplyNodes to cachedSupplyRootVisible
+        }
+        val roots = linkedMapOf(
+            "power_supply" to "/sys/class/power_supply",
+            "typec" to "/sys/class/typec",
+            "usb_power_delivery" to "/sys/class/usb_power_delivery",
+            "dual_role_usb" to "/sys/class/dual_role_usb",
+            "usb_role" to "/sys/class/usb_role",
+            "thermal" to "/sys/class/thermal",
+            "hwmon" to "/sys/class/hwmon"
+        )
         val result = linkedMapOf<String, String>()
         val excluded = setOf("device", "subsystem", "driver", "power", "firmware_node", "of_node")
         var visibleRoots = 0
+        var powerSupplyRootVisible = false
         for ((prefix, rootPath) in roots) {
             val root = File(rootPath)
-            if (!root.exists()) continue
+            if (!root.exists()) {
+                result["@diagnostic/" + prefix + "/root"] = "NOT_PRESENT"
+                continue
+            }
             val dirs = try { root.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null }
-            if (dirs == null) { result["@diagnostic/" + prefix + "/root"] = "LIST_DENIED"; continue }
+            if (dirs == null) {
+                result["@diagnostic/" + prefix + "/root"] = "LIST_DENIED"
+                continue
+            }
             visibleRoots++
+            if (prefix == "power_supply") powerSupplyRootVisible = true
+            result["@diagnostic/" + prefix + "/root"] = "VISIBLE"
             for (dir in dirs) {
                 if (result.size >= 1200) break
                 if (dir.name in excluded) continue
-                val attrs = try { if (dir.isDirectory) dir.listFiles()?.sortedBy { it.name } else listOf(dir) } catch (_: Throwable) { null }
-                if (attrs == null) { result["@diagnostic/" + prefix + "/" + dir.name] = "LIST_DENIED"; continue }
+                val attrs = try {
+                    if (dir.isDirectory) dir.listFiles()?.sortedBy { it.name } else listOf(dir)
+                } catch (_: Throwable) { null }
+                if (attrs == null) {
+                    result["@diagnostic/" + prefix + "/" + dir.name] = "LIST_DENIED"
+                    continue
+                }
                 for (file in attrs) {
                     if (result.size >= 1200) break
                     if (file.name in excluded || !file.isFile) continue
-                    val value = try { if (!file.canRead()) "READ_DENIED" else file.inputStream().bufferedReader().use { it.readLine()?.trim()?.take(240) ?: "EMPTY" } } catch (t: Throwable) { "ERROR:" + t.javaClass.simpleName + ":" + (t.message ?: "unknown") }
-                    val key = if (prefix == "power_supply") dir.name + "/" + file.name else prefix + "/" + dir.name + "/" + file.name
+                    val value = try {
+                        if (!file.canRead()) "READ_DENIED"
+                        else file.inputStream().bufferedReader().use { it.readLine()?.trim()?.take(240) ?: "EMPTY" }
+                    } catch (t: Throwable) {
+                        "ERROR:" + t.javaClass.simpleName + ":" + (t.message ?: "unknown")
+                    }
+                    val key = if (prefix == "power_supply") dir.name + "/" + file.name
+                        else prefix + "/" + dir.name + "/" + file.name
                     result[key] = value
                 }
             }
         }
         result["@diagnostic/visible_roots"] = visibleRoots.toString()
-        return Pair(result, visibleRoots > 0)
+        cachedSupplyNodes = result
+        cachedSupplyRootVisible = powerSupplyRootVisible
+        supplyScanCompletedAtMs = now
+        return result to powerSupplyRootVisible
     }
-    private fun buildMeasurementDiagnosis(nodes: Map<String, String>, rootVisible: Boolean): String {
+
+    companion object {
+        private const val SYSFS_UI_REFRESH_MS = 15_000L
+        private const val SHIZUKU_REQUEST_CODE = 4101
+        private const val CSV_EXPORT_REQUEST_CODE = 5101
+        private const val NOTIFICATION_REQUEST_CODE = 5102
+        private const val LINK_POLL_INTERVAL_MS = 2_000L
+    }
+
+    private fun buildMeasurementDiagnosis(nodes: Map<String, String>, powerSupplyRootVisible: Boolean): String {
         val lines = mutableListOf<String>()
         lines += "AUTOMATIC MEASUREMENT ACCESS DIAGNOSIS"
-        lines += "Power-supply root: " + if (rootVisible) "visible" else "not visible"
+        lines += "Power-supply root: " + if (powerSupplyRootVisible) "visible" else "not visible / not enumerable"
         val nonSupplyRoots = setOf("typec", "usb_power_delivery", "dual_role_usb", "usb_role", "thermal", "hwmon", "@diagnostic")
-        val supplies = nodes.keys.filter { !it.startsWith("@") && it.substringBefore("/") !in nonSupplyRoots }.map { it.substringBefore("/") }.distinct()
+        val supplies = nodes.keys.filter { !it.startsWith("@") && it.substringBefore("/") !in nonSupplyRoots }
+            .map { it.substringBefore("/") }.distinct()
         val external = supplies.filter { it !in listOf("battery", "bms", "main") }
         lines += "External power-supply entries: " + external.joinToString().ifBlank { "none discovered" }
-        var validPair = false
+        var usbPairFound = false
+        var nonUsbPairFound = false
         for (name in external) {
             val base = name + "/"
             val voltage = nodes[base + "voltage_now"]?.toLongOrNull()
             val current = nodes[base + "current_now"]?.toLongOrNull()
-            lines += "Supply " + name + ": type=" + (nodes[base + "type"] ?: "not exported") + "; online=" + (nodes[base + "online"] ?: "not exported")
-            if (voltage != null && current != null && voltage in 1000000L..30000000L && kotlin.math.abs(current) <= 20000000L) {
-                validPair = true
-                lines += "  Candidate live VBUS/IBUS: " + String.format(Locale.US, "%.3f V / %.3f A", voltage / 1000000.0, current / 1000000.0)
-                lines += "  Candidate USB input power: " + String.format(Locale.US, "%.3f W", voltage.toDouble() * current.toDouble() / 1.0e12) + "; verify driver semantics"
+            val type = nodes[base + "type"]?.uppercase(Locale.US).orEmpty()
+            val usbSupply = name.contains("usb", ignoreCase = true) || type.contains("USB")
+            lines += "Supply " + name + ": type=" + (nodes[base + "type"] ?: "not exported") +
+                "; online=" + (nodes[base + "online"] ?: "not exported")
+            if (voltage != null && current != null &&
+                voltage in 1_000_000L..30_000_000L && kotlin.math.abs(current) <= 20_000_000L) {
+                if (usbSupply) {
+                    usbPairFound = true
+                    lines += "  USB-source same-supply V/I candidate: " +
+                        String.format(Locale.US, "%.3f V / %.3f A", voltage / 1_000_000.0, current / 1_000_000.0)
+                    lines += "  Candidate USB input power: " +
+                        String.format(Locale.US, "%.3f W", voltage.toDouble() * current.toDouble() / 1.0e12) +
+                        "; source path/driver semantics still require handset validation"
+                } else {
+                    nonUsbPairFound = true
+                    lines += "  External same-supply V/I pair exists, but supply name/type does not identify USB; NOT classified as VBUS/IBUS or USB input power."
+                    lines += "  Raw candidate: " + voltage + " µV / " + current + " µA"
+                }
             } else {
-                lines += "  No same-supply live pair: voltage_now=" + (nodes[base + "voltage_now"] ?: "NOT EXPORTED") + "; current_now=" + (nodes[base + "current_now"] ?: "NOT EXPORTED")
+                lines += "  No plausible same-supply live pair: voltage_now=" +
+                    (nodes[base + "voltage_now"] ?: "NOT EXPORTED") + "; current_now=" +
+                    (nodes[base + "current_now"] ?: "NOT EXPORTED")
             }
-            val limits = listOf("input_voltage_limit", "input_current_limit", "input_power_limit", "constant_charge_current_max").mapNotNull { key -> nodes[base + key]?.let { key + "=" + it } }
+            val limits = listOf("input_voltage_limit", "input_current_limit", "input_power_limit", "constant_charge_current_max")
+                .mapNotNull { key -> nodes[base + key]?.let { key + "=" + it } }
             if (limits.isNotEmpty()) lines += "  CONFIGURED LIMITS (not measurements): " + limits.joinToString()
         }
-        if (!validPair) lines += "USB input V/A/W unavailable: no external supply exposed plausible voltage_now and current_now together to this app UID."
-        val usb = nodes.filterKeys { it.startsWith("typec/") || it.startsWith("usb_power_delivery/") || it.startsWith("dual_role_usb/") || it.startsWith("usb_role/") }
+        if (!usbPairFound) {
+            lines += "USB input V/A/W unavailable as a USB-identified source: no external supply with USB name/type exposed a plausible same-supply voltage_now/current_now pair."
+        }
+        if (nonUsbPairFound) lines += "At least one external supply exposed a numeric pair, but its source identity is not USB; no USB claim was made for it."
+        val usb = nodes.filterKeys {
+            it.startsWith("typec/") || it.startsWith("usb_power_delivery/") ||
+                it.startsWith("dual_role_usb/") || it.startsWith("usb_role/")
+        }
         lines += "USB-C / Type-C / PD / role attributes discovered: " + usb.size
-        if (usb.isEmpty()) lines += "USB-C interface diagnosis: class absent, hidden by SELinux, or not enumerable by ordinary app UID."
+        if (usb.isEmpty()) lines += "USB-C interface diagnosis: class absent, hidden by access controls, or not enumerable by ordinary app UID."
         val thermal = nodes.filterKeys { it.startsWith("thermal/") || it.startsWith("hwmon/") }
         lines += "Thermal / hwmon attributes discovered: " + thermal.size
         val denied = nodes.filterValues { it == "READ_DENIED" || it == "LIST_DENIED" || it.startsWith("ERROR:") }
@@ -1019,14 +1092,14 @@ class MainActivity : Activity() {
         historyUpdatedAtMs = now
         historyLoadInFlight = true
         Thread {
-            var result: String
-            val database = RecorderDatabase(applicationContext)
-            result = try {
+            var database: RecorderDatabase? = null
+            val result = try {
+                database = RecorderDatabase(applicationContext)
                 database.historySummary(now)
             } catch (t: Throwable) {
                 "History read failed: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
             } finally {
-                try { database.close() } catch (_: Throwable) { }
+                try { database?.close() } catch (_: Throwable) { }
             }
             runOnUiThread {
                 historyLoadInFlight = false
@@ -1036,12 +1109,14 @@ class MainActivity : Activity() {
     }
 
     private fun exportRecorderHistory() {
+        var database: RecorderDatabase? = null
         try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val file = File(cacheDir, "BatteryScope_History_" + timestamp + ".csv")
-            val database = RecorderDatabase(this)
-            file.bufferedWriter(Charsets.UTF_8).use { database.exportCsv(it) }
-            database.close()
+            val directory = File(getExternalFilesDir(null) ?: filesDir, "exports")
+            if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Could not create private export directory")
+            val file = File(directory, "BatteryScope_History_" + timestamp + ".csv")
+            database = RecorderDatabase(this)
+            file.bufferedWriter(Charsets.UTF_8).use { database!!.exportCsv(it) }
             if (file.length() == 0L) {
                 statusText.text = "No telemetry history exists to export yet."
                 return
@@ -1049,6 +1124,8 @@ class MainActivity : Activity() {
             launchCsvExport(file)
         } catch (t: Throwable) {
             statusText.text = "HISTORY EXPORT FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
+        } finally {
+            try { database?.close() } catch (_: Throwable) { }
         }
     }
 
