@@ -17,6 +17,7 @@ Package: `com.batteryscope`
 - Keep the UI responsive: filesystem traversal, telemetry collection, database summaries and exports run off the main thread.
 - Preserve local history with non-destructive SQLite migrations.
 - Save every coherent milestone and update this handoff/progress log in this GitHub branch so a later chat can resume.
+- Monitoring is automatic after first app launch; no Start/Stop UI or service stop action. Resume is attempted on boot and app replacement.
 
 ## Current implementation
 
@@ -38,7 +39,7 @@ Package: `com.batteryscope`
 - Duplicate MainActivity lifecycle override found during review was removed.
 
 ### Recording and analytics
-- User-started foreground service; 30-second BatteryManager sample target; 120-second kernel-tree inventory.
+- Automatically requested foreground service on Activity resume; boot and package-replacement receivers request recovery; 30-second BatteryManager sample target; 120-second kernel-tree inventory. The latest lifecycle edits still require CI and device validation.
 - Selectable continuous mode (partial CPU wake lock for screen-off continuity) or low-impact mode (no permanent wake lock; screen-off gaps are expected and measured).
 - Local SQLite sample/event history, monotonic elapsed time and boot count.
 - Screen-on/off and power-connected/disconnected/battery-state events.
@@ -60,6 +61,21 @@ Package: `com.batteryscope`
 - Median of sessions, spread and qualitative confidence.
 - 4,500 mAh original design-capacity baseline for RMX2161.
 - No forced 0% cycle. If the fuel gauge does not expose a usable charge counter, capacity remains unavailable.
+
+## Device-wide monitoring expansion
+
+Read `DEVICE_TELEMETRY_ARCHITECTURE.md` before implementing new collectors. It defines the target product, capability matrix, public API versus privileged boundary, device-specific unknowns, data-quality contract and phased acceptance gates.
+
+Important newly identified sources:
+- UsageStatsManager: foreground app transitions, usage aggregates and screen-interactive event aggregates. Detailed events are only retained for a few days, so regular import and deduplication are required.
+- NetworkStatsManager: Android-maintained mobile/Wi-Fi byte buckets and per-UID traffic where access permits. Network bytes are not battery energy.
+- StorageStatsManager: package/UID storage totals, queried on a worker because operations may take seconds.
+- PowerManager: thermal status and thermal headroom; headroom is an estimate.
+- ActivityManager.MemoryInfo: system RAM pressure.
+- SensorManager: actual runtime sensor inventory; product-sheet sensor claims are not a substitute for enumeration.
+- CPU/GPU/thermal kernel paths: best-effort read-only discovery only.
+
+BatteryStats per-app power and detailed system battery history remain privileged. Ordinary-app code must not pretend UsageStats or network traffic provides per-app mAh. The exact RMX2161 firmware capability census remains pending.
 
 ## Important measurement limitations
 
