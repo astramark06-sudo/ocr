@@ -513,6 +513,35 @@ class RecorderDatabase(context: Context) :
         writableDatabase.insert("events", null, values)
     }
 
+
+    fun capacityEstimateReport(nowMs: Long = System.currentTimeMillis()): String {
+        val samples = mutableListOf<CapacitySample>()
+        val from = nowMs - 90L * 24L * 60L * 60L * 1000L
+        readableDatabase.rawQuery(
+            """SELECT timestamp_ms,boot_count,battery_percent,battery_status,plug_type,charge_counter_uah
+               FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms""".trimIndent(),
+            arrayOf(from.toString())
+        ).use { cursor ->
+            val time = cursor.getColumnIndexOrThrow("timestamp_ms")
+            val boot = cursor.getColumnIndexOrThrow("boot_count")
+            val percent = cursor.getColumnIndexOrThrow("battery_percent")
+            val status = cursor.getColumnIndexOrThrow("battery_status")
+            val plug = cursor.getColumnIndexOrThrow("plug_type")
+            val counter = cursor.getColumnIndexOrThrow("charge_counter_uah")
+            while (cursor.moveToNext()) {
+                samples += CapacitySample(
+                    timestampMs = cursor.getLong(time),
+                    bootCount = if (cursor.isNull(boot)) null else cursor.getInt(boot),
+                    percent = if (cursor.isNull(percent)) null else cursor.getInt(percent),
+                    status = cursor.getString(status) ?: "UNKNOWN",
+                    plug = cursor.getString(plug) ?: "NONE",
+                    chargeCounterUah = if (cursor.isNull(counter)) null else cursor.getLong(counter)
+                )
+            }
+        }
+        return BatteryCapacityEstimator.report(samples)
+    }
+
     fun historySummary(now: Long = System.currentTimeMillis()): String {
         val windows = listOf(
             "24 HOURS" to 24L * 60 * 60 * 1000,
