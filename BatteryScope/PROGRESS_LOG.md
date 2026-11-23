@@ -62,3 +62,12 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 
 - Added live kernel fuel-gauge parsing for optional `cycle_count`, `charge_full` and `charge_full_design`; displays a separate gauge-reported capacity-health ratio and explicit missing-attribute diagnosis. This remains distinct from the empirical charge-counter/SOC capacity estimate.
 - Added the optional hardware inventory field-cap diagnostic and Android thermal status to the live scan.
+
+## Final checkpoint — source audit and remaining verification
+
+- Confirmed no Shizuku, Shizuku provider/AIDL, privileged service, or Oplus `cool_down` control references remain in the app's MainActivity, recorder service, manifest or Gradle dependencies; deleted Shizuku service/AIDL paths return not found.
+- Confirmed SQLite schema v3 migration and CSV field alignment: 27 header fields, 22 sample-specific columns plus record type/timestamp/elapsed and event columns; sample and event row widths both align to 27.
+- Corrected history charge-counter reporting so missing or direction-inconsistent counter values remain `n/a`, not false 0 mAh or 0 mA.
+- Local isolated Kotlin checks passed for capacity estimation (3 scenarios) and rate/forecast arithmetic (4 checks). These are not a substitute for the full Android Gradle build.
+- Android Gradle build, repository JVM suite, APK artifact/signature and RMX2161 runtime validation remain unverified. Do not install over an existing signed build or uninstall an older app without protecting its local database.
+- Latest inspected source milestone before this checkpoint: `344c04242220d17dd2bb6be5c9fbeae5bbd97d12`.
