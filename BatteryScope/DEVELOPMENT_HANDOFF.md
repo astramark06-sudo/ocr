@@ -47,7 +47,7 @@ Package: `com.batteryscope`
 - Recent charge/discharge session durations, SOC thresholds and historical time-to-full/time-to-empty estimates.
 - App foreground time with coincident SOC movement. This is correlation, not per-app electrical energy/current.
 - CSV export includes chronological samples/events, boot metadata and raw hardware tree snapshots.
-- SQLite schema v3 adds charger maximum current/voltage, battery-present and optional cycle count without deleting v1/v2 history.
+- SQLite schema v4 adds charger maximum current/voltage, battery-present and optional cycle count without deleting v1/v2 history.
 
 ### Capacity estimate
 - Estimates full-charge capacity from charge-counter movement versus SOC movement across continuous sessions.
@@ -70,7 +70,7 @@ Package: `com.batteryscope`
 ## Next engineering priorities
 
 1. Build and test version 1.14 on GitHub Actions; repair all compiler/test failures before APK delivery.
-2. Check that the CSV header, sample field list and event row have exactly aligned columns after schema v3.
+2. Check that the CSV header, sample field list and event row have exactly aligned columns after schema v4.
 2. Audit MainActivity and recorder for any remaining main-thread I/O, races, lifecycle crashes or unbounded work.
 3. Review schema-v3 migration from v1 and v2 databases, CSV header/row alignment, and large-history performance.
 4. Add focused JVM tests for rate math, session splitting, charging-while-plugged decline, screen-state projections, and migration/CSV invariants where testable.
