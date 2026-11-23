@@ -173,3 +173,14 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - Updated README, audit, project status, development handoff and changelog to distinguish implemented source from the device-wide roadmap.
 - Not yet verified: Gradle compilation, unit tests, Android CI run, APK artifact/signature, automatic startup on first launch, reboot resume, Realme battery-management behavior or multi-day screen-off continuity. No APK is declared ready.
 - Next: static review all lifecycle edits and API collector integration points; inspect exact Android CI run; implement capability registry/device census, then UsageStats/NetworkStats/StorageStats imports in separate tested phases.
+
+
+## 2026-11-23 — Android CI failure diagnosis and compile fix
+
+- Inspected the exact failed BatteryScope Android workflow run `45207279032` for commit `81286c706390d6c60d94a60428c8b298fa0651d2`.
+- The Android SDK setup now succeeds after excluding the retired `tools` SDK package. Java 17, Android SDK package installation and Gradle 8.9 setup all completed.
+- Kotlin compilation then failed at `MainActivity.kt:407`: an unterminated string literal in the bounded kernel-scan warning (a physical newline had been inserted before the closing quote).
+- Corrected the string literal in commit `8463bb34afa81b2ba26e5598342ad8c5f798ce78`.
+- The new APK workflow run `45211353283` was observed queued/in progress on that commit. Its final outcome and artifact have not yet been verified.
+- The failed run uploaded no APK: build failed before APK creation, and the artifact step explicitly reported that the APK path did not exist.
+- No APK is ready and no install/update should be attempted.
