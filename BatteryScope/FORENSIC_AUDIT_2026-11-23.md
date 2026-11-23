@@ -11,7 +11,7 @@ APK build commit: `1e1660e51bcae0912bb84381954467471e010e18`
 
 The branch was five commits ahead of the APK build commit. GitHub's compare endpoint showed that those five commits changed documentation only; the Android source/configuration files were unchanged. The APK therefore represented the Android source present at that branch head before this audit's corrective changes.
 
-Final repository branch head after audit documentation/workflow cleanup: `f78c9e63c63652b6dc8d600623482d9a18dee043`. GitHub compare from the v1.15 app-source commit `480a567cd7c90f552976dc60472fa6ef11a5e126` to this final head shows only documentation and workflow-file changes; no Android app source/build files changed. The verified v1.15 APK therefore still corresponds to the current app source. The Android workflow path filter now runs for app source/build configuration changes rather than documentation-only edits.
+App-source verification checkpoint branch head after workflow cleanup: `f78c9e63c63652b6dc8d600623482d9a18dee043`. GitHub compare from the v1.15 app-source commit `480a567cd7c90f552976dc60472fa6ef11a5e126` to this final head shows only documentation and workflow-file changes; no Android app source/build files changed. The verified v1.15 APK therefore still corresponds to the current app source. The Android workflow path filter now runs for app source/build configuration changes rather than documentation-only edits.
 
 ## APK and artifact integrity
 
