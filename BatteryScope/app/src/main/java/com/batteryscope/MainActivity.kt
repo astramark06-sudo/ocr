@@ -499,11 +499,12 @@ class MainActivity : Activity() {
         telemetryHandler.post {
         try {
         val reading = readSnapshot()
-        val voltageV = reading.rawVoltageMv?.takeIf { it in 2500..5000 }?.div(1000.0)
-        val currentMa = reading.currentUa?.div(1000.0)
-        val estimatedBatteryPowerW = if (voltageV != null && currentMa != null) {
-            voltageV * currentMa / 1000.0
-        } else null
+        val voltageAssessment = BatteryMeasurementQuality.voltage(reading.rawVoltageMv)
+        val currentAssessment = BatteryMeasurementQuality.current(reading.currentUa, reading.status, reading.plugged)
+        val currentMa = reading.currentUa?.takeIf { currentAssessment.usable }?.div(1000.0)
+        val estimatedBatteryPowerW = BatteryMeasurementQuality.batteryPowerW(
+            reading.rawVoltageMv, reading.currentUa, reading.status, reading.plugged
+        )
         val format = { value: Double?, unit: String ->
             if (value == null || !value.isFinite()) "Unavailable"
             else String.format(Locale.US, "%.3f %s", value, unit)
@@ -526,25 +527,24 @@ class MainActivity : Activity() {
         val kernelDesignChargeUah = batteryGaugeValue("charge_full_design")?.takeIf { it > 0L }
         val kernelHealthPercent = if (kernelFullChargeUah != null && kernelDesignChargeUah != null)
             kernelFullChargeUah.toDouble() / kernelDesignChargeUah.toDouble() * 100.0 else null
+        val voltageSummary = if (voltageAssessment.usable) {
+            "${reading.rawVoltageMv} mV"
+        } else {
+            "Unavailable — ${voltageAssessment.status}; raw EXTRA_VOLTAGE=${reading.rawVoltageMv ?: "missing"}"
+        }
+        val currentSummary = if (currentAssessment.usable) {
+            "${format(currentMa, "mA")} (raw API ${reading.currentUa} µA)"
+        } else {
+            "Unavailable — ${currentAssessment.status}; raw API=${reading.currentUa?.let { "$it µA" } ?: reading.currentPropertyStatus}"
+        }
         val batteryReport = buildString {
-            appendLine("Battery level          ${reading.percent?.let { "$it %" } ?: "Unavailable"}")
-            appendLine("Battery voltage        ${reading.rawVoltageMv?.let { if (it in 2500..5000) "$it mV raw" else "$it mV raw — INVALID / outside expected battery range" } ?: "Unavailable"}")
-            appendLine("Battery current        ${format(currentMa, "mA")}  (${reading.currentUa?.let { "$it µA raw" } ?: "Unavailable"})")
-            appendLine("Average current        ${reading.averageCurrentUa?.let { String.format(Locale.US, "%.3f mA (%d µA)", it / 1000.0, it) } ?: "Unavailable"}")
-            appendLine("Battery power estimate ${format(estimatedBatteryPowerW, "W")}  [battery-side only]")
-            appendLine("Remaining-charge counter ${reading.chargeCounterUah?.let { "$it µAh / ${String.format(Locale.US, "%.1f mAh", it / 1000.0)} (Android estimate; not full-charge capacity)" } ?: "Unavailable"}")
-            appendLine("Energy counter         ${reading.energyNwh?.let { "$it nWh / ${String.format(Locale.US, "%.3f Wh", it / 1_000_000_000.0)}" } ?: "Unavailable"}")
-            appendLine("Temperature            ${format(reading.temperatureC, "°C")}")
-            appendLine("Android battery health ${reading.health} (framework status; not capacity health)")
-            appendLine("Technology             ${reading.technology}")
-            appendLine("Battery present        ${reading.batteryPresent?.toString() ?: "NOT REPORTED"}")
-            appendLine("Invalid charger flag   ${reading.invalidCharger?.let { if (it != 0) "YES ($it)" else "NO (0)" } ?: "NOT REPORTED BY FRAMEWORK"}")
-            appendLine("Charge cycle count     ${reading.cycleCount?.toString() ?: kernelCycleCount?.toString() ?: "NOT EXPOSED"}")
-            appendLine("Kernel charge_full     ${kernelFullChargeUah?.let { String.format(Locale.US, "%.1f mAh (raw µAh)", it / 1000.0) } ?: "NOT EXPOSED"}")
-            appendLine("Kernel design capacity ${kernelDesignChargeUah?.let { String.format(Locale.US, "%.1f mAh (raw µAh)", it / 1000.0) } ?: "NOT EXPOSED"}")
-            appendLine("Kernel gauge capacity health ${kernelHealthPercent?.let { String.format(Locale.US, "%.1f%% (charge_full / charge_full_design)", it) } ?: "UNAVAILABLE — both kernel capacity attributes are required"}")
-            appendLine("Max charging current   ${reading.maxChargingCurrentUa?.let { String.format(Locale.US, "%.0f mA (%d µA)", it / 1000.0, it) } ?: "NOT REPORTED"}")
-            append("Max charging voltage   ${reading.maxChargingVoltageUv?.let { String.format(Locale.US, "%.3f V (%d µV)", it / 1_000_000.0, it) } ?: "NOT REPORTED"}")
+            appendLine("Battery level: ${reading.percent?.let { "$it%" } ?: "Unavailable"}")
+            appendLine("State / source: ${reading.status} / ${reading.plugged}")
+            appendLine("Battery voltage: $voltageSummary")
+            appendLine("Battery current: $currentSummary")
+            appendLine("Battery-side power estimate: ${format(estimatedBatteryPowerW, "W")} (signed; battery side only)")
+            appendLine("Charger-input power: Unavailable — no verified USB-side voltage/current pair")
+            appendLine("Temperature: ${format(reading.temperatureC, "°C")}")
         }
 
         val chargerReport = buildString {
@@ -569,11 +569,11 @@ class MainActivity : Activity() {
             appendLine("Ordinary app sysfs: ${if (reading.supplyRootReadable) "directory visible; individual files may still be denied" else "not visible"}")
             appendLine("ACTION_BATTERY_CHANGED: " + if (reading.batteryBroadcastAvailable) "available" else "NOT AVAILABLE from Android sticky broadcast")
             appendLine("Battery percentage: " + (reading.percent?.let { "available (${it}%)" } ?: "unavailable — " + reading.batteryPercentStatus))
-            appendLine("Battery voltage: " + (reading.rawVoltageMv?.let { "available (${it} mV)" } ?: "unavailable — EXTRA_VOLTAGE missing or invalid"))
+            appendLine("Battery voltage: raw EXTRA_VOLTAGE=${reading.rawVoltageMv ?: "missing"} mV field; quality=${voltageAssessment.status}")
             appendLine("Battery temperature: " + (reading.temperatureC?.let { "available (${it} °C)" } ?: "unavailable — EXTRA_TEMPERATURE missing or outside accepted range"))
             appendLine("Android charge counter: ${reading.chargeCounterUah?.let { "available (${it} µAh)" } ?: "unavailable — " + reading.chargeCounterPropertyStatus}")
-            appendLine("Instantaneous battery current: ${reading.currentUa?.let { "available (${it} µA)" } ?: "unavailable — " + reading.currentPropertyStatus}")
-            appendLine("Average battery current: ${reading.averageCurrentUa?.let { "available (${it} µA)" } ?: "unavailable — " + reading.averageCurrentPropertyStatus}")
+            appendLine("Instantaneous battery current: raw API=${reading.currentUa?.let { "$it µA" } ?: reading.currentPropertyStatus}; quality=${currentAssessment.status}")
+            appendLine("Average battery current: raw API=${reading.averageCurrentUa?.let { "$it µA" } ?: reading.averageCurrentPropertyStatus}; not used for watt calculation")
             appendLine("Battery energy counter: ${reading.energyNwh?.let { "available (${it} nWh)" } ?: "unavailable — " + reading.energyPropertyStatus}")
             appendLine("Invalid charger status: ${reading.invalidCharger?.let { if (it != 0) "framework reports invalid charger ($it)" else "framework reports no invalid-charger flag" } ?: "extra not supplied by Android/ROM"}")
             appendLine("Charger advertised maximum current/voltage: ${if (reading.maxChargingCurrentUa != null || reading.maxChargingVoltageUv != null) "partially or fully reported in ACTION_BATTERY_CHANGED" else "not supplied by Android/charger; live USB input V/I may require restricted kernel driver nodes"}")
