@@ -80,3 +80,12 @@ BatteryStats system history and per-UID battery energy require privileged BATTER
 The Realme Narzo 20 Pro official specification confirms Helio G95, Mali-G76 MC4, 4500 mAh typical battery, 65 W SuperDart, listed wireless radios and physical sensor categories. It does not confirm which sysfs nodes, fuel-gauge counters, charger input telemetry or GPU/CPU statistics are readable by BatteryScope on the installed Android 12 firmware. An on-device capability census is required.
 
 Lifecycle source update: recorder start/stop UI and the service stop action have been removed; app resume requests monitoring, and boot/package-replacement receivers request recovery automatically. Continuous execution remains best-effort because force-stop, shutdown, Android power management and Realme OEM restrictions cannot be overridden by an ordinary app. Build and physical validation are pending.
+
+
+## Field validation: RMX2161 export review — 2026-11-23
+
+A user-provided CSV contained 22 samples and 51 events over 13m35.654s. SOC 83→80%; charge counter 3,735,000→3,600,000 µAh; temperature 33.8–35.4 °C. All samples were NOT_CHARGING with plug NONE. No charging session or USB-input power was observed.
+
+The exported `battery_voltage_mv` values were 3 or 4, not values in the expected millivolt range. Source inspection confirms MainActivity only accepts 2,500–5,000 for battery voltage and therefore suppresses the battery-side watt calculation for these readings. The `battery_current_ua` values were 14–674 (mean 201.9; median 132), while the UI divides by 1,000 to display mA. The charge-counter endpoint delta corresponds to about 595.8 mA average over the full interval, but the counter is visibly quantized in 45,000 µAh steps. This points to unresolved OEM/API scaling and/or fuel-gauge quantization; it does not establish a safe conversion. Raw units must remain unchanged until independently validated.
+
+Average current, energy counter, cycle count, charger max-current/max-voltage and USB V/I candidates were null in every sample. Usage Access was disabled for 20/22 samples. There were 21 intervals: mean 38.84s and one 154.741s gap. Kernel tree capture yielded no fields because roots were denied or absent/hidden. This dataset validates persistence/export only; it does not validate measurement semantics, charger input watts or continuous background reliability.
