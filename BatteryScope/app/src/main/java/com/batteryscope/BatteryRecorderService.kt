@@ -48,6 +48,8 @@ class BatteryRecorderService : Service() {
     private var lastSamplePlug: String? = null
     private var lastBatteryPercentStatus: String? = null
     private val lastBatteryPropertyStatus = mutableMapOf<Int, String>()
+    private var lastCurrentMeasurementQuality: String? = null
+    private var lastVoltageMeasurementQuality: String? = null
     private var lastSysfsReadMs = 0L
     private var lastSysfsJson = JSONObject()
     private var receiverRegistered = false
@@ -255,6 +257,16 @@ class BatteryRecorderService : Service() {
         val average = longProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)
         val charge = longProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
         val energy = longProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
+        val currentQuality = BatteryMeasurementQuality.current(current, status, plug).status
+        if (currentQuality != lastCurrentMeasurementQuality) {
+            event("BATTERY_CURRENT_QUALITY", "quality=" + currentQuality + "; status=" + status + "; plug=" + plug + "; raw_current_ua=" + (current?.toString() ?: "UNAVAILABLE"))
+            lastCurrentMeasurementQuality = currentQuality
+        }
+        val voltageQuality = BatteryMeasurementQuality.voltage(voltage.takeIf { it > 0 }).status
+        if (voltageQuality != lastVoltageMeasurementQuality) {
+            event("BATTERY_VOLTAGE_QUALITY", "quality=" + voltageQuality + "; raw_extra_voltage=" + (voltage.takeIf { it > 0 }?.toString() ?: "UNAVAILABLE") + "; expected_unit=mV")
+            lastVoltageMeasurementQuality = voltageQuality
+        }
         val screenOn = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive
         val activeApp = updateForegroundPackage(now)
         val refreshSysfs = now - lastSysfsReadMs >= SYSFS_INTERVAL_MS
