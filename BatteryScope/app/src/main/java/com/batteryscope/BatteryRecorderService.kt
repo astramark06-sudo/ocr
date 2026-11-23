@@ -568,6 +568,9 @@ class RecorderDatabase(context: Context) :
         )
         // Only recent session detail is materialised; rolling statistics stream directly from SQLite.
         val recentRows = readWindow(now - 30L * 24 * 60 * 60 * 1000)
+        val latestPercent = readableDatabase.rawQuery(
+            "SELECT battery_percent FROM samples WHERE battery_percent IS NOT NULL ORDER BY timestamp_ms DESC LIMIT 1", null
+        ).use { if (it.moveToFirst()) it.getInt(0) else null }
         return buildString {
             val total = readableDatabase.rawQuery("SELECT COUNT(*) FROM samples", null).use {
                 if (it.moveToFirst()) it.getLong(0) else 0L
@@ -591,6 +594,14 @@ class RecorderDatabase(context: Context) :
                 appendLine("Discharging screen ON: " + stats.drainOnHours + " h • -" + stats.drainOnPct + "% • " + stats.drainOnRate + " %/h")
                 appendLine("Discharging screen OFF: " + stats.drainOffHours + " h • -" + stats.drainOffPct + "% • " + stats.drainOffRate + " %/h")
                 appendLine("Discharge rate comparison: screen ON " + stats.drainOnRate + " %/h vs screen OFF " + stats.drainOffRate + " %/h (historical averages)")
+                if (latestPercent != null) {
+                    appendLine("From current " + latestPercent + "%, estimated time to 100% at screen-ON charging rate: " +
+                        forecastDuration(100.0 - latestPercent, stats.chargeOnRate) + " • screen-OFF rate: " +
+                        forecastDuration(100.0 - latestPercent, stats.chargeOffRate))
+                    appendLine("From current " + latestPercent + "%, estimated time to 0% at screen-ON discharge rate: " +
+                        forecastDuration(latestPercent.toDouble(), stats.drainOnRate) + " • screen-OFF rate: " +
+                        forecastDuration(latestPercent.toDouble(), stats.drainOffRate))
+                }
                 appendLine("Battery decline while Android reports CHARGING or both samples show a connected source: " + stats.pluggedDrainHours + " h • -" + stats.pluggedDrainPct + "% • " + stats.pluggedDrainRate + " %/h")
                 appendLine("  Plugged decline screen ON: " + stats.pluggedDrainOnHours + " h • -" + stats.pluggedDrainOnPct + "% • " + stats.pluggedDrainOnRate + " %/h")
                 appendLine("  Plugged decline screen OFF: " + stats.pluggedDrainOffHours + " h • -" + stats.pluggedDrainOffPct + "% • " + stats.pluggedDrainOffRate + " %/h")
@@ -964,6 +975,13 @@ class RecorderDatabase(context: Context) :
             if (!upward && before > threshold && after <= threshold) return elapsedFromStart
         }
         return null
+    }
+
+    private fun forecastDuration(remainingPercentagePoints: Double, rateText: String): String {
+        val rate = rateText.toDoubleOrNull()
+        if (rate == null || rate <= 0.0 || remainingPercentagePoints <= 0.0) return "not enough matching history"
+        val ms = (remainingPercentagePoints / rate * 3_600_000.0).toLong()
+        return durationText(ms) + " estimated from historical average"
     }
 
     private fun durationText(ms: Long): String {
