@@ -438,10 +438,27 @@ class BatteryRecorderService : Service() {
         }
     }
 
+    /**
+     * Broadcast receivers and Service lifecycle callbacks run on the main thread.
+     * Queue their SQLite writes on the recorder worker so storage latency cannot
+     * stall Android's main thread. Calls already on the worker stay ordered inline.
+     */
     private fun event(type: String, details: String) {
+        if (::handler.isInitialized && Looper.myLooper() != worker.looper) {
+            handler.post { writeEventOnWorker(type, details) }
+        } else {
+            writeEventOnWorker(type, details)
+        }
+    }
+
+    private fun writeEventOnWorker(type: String, details: String) {
         synchronized(databaseLock) {
             if (!databaseAvailable) return
-            try { db.insertEvent(System.currentTimeMillis(), type, details) } catch (_: Throwable) { }
+            try {
+                db.insertEvent(System.currentTimeMillis(), type, details)
+            } catch (_: Throwable) {
+                // A failed diagnostic write must never crash the recorder or UI.
+            }
         }
     }
 
@@ -473,11 +490,22 @@ class BatteryRecorderService : Service() {
         releaseSamplingWakeLock()
         if (receiverRegistered) try { unregisterReceiver(receiver) } catch (_: Throwable) { }
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
-        synchronized(databaseLock) {
-            databaseAvailable = false
-            try { db.close() } catch (_: Throwable) { }
+        // Drain already-queued event/sample work before closing SQLite. Closing
+        // the database here on the main thread could block while a write is active.
+        val closeDatabase = Runnable {
+            synchronized(databaseLock) {
+                databaseAvailable = false
+                try { db.close() } catch (_: Throwable) { }
+            }
+            try { worker.quitSafely() } catch (_: Throwable) { }
         }
-        try { worker.quitSafely() } catch (_: Throwable) { }
+        if (!::handler.isInitialized || !handler.post(closeDatabase)) {
+            synchronized(databaseLock) {
+                databaseAvailable = false
+                try { db.close() } catch (_: Throwable) { }
+            }
+            try { worker.quitSafely() } catch (_: Throwable) { }
+        }
         super.onDestroy()
     }
 
