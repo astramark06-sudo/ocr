@@ -727,6 +727,46 @@ class MainActivity : Activity() {
         result["@diagnostic/visible_roots"] = visibleRoots.toString()
         return Pair(result, visibleRoots > 0)
     }
+    private fun buildMeasurementDiagnosis(nodes: Map<String, String>, rootVisible: Boolean): String {
+        val lines = mutableListOf<String>()
+        lines += "AUTOMATIC MEASUREMENT ACCESS DIAGNOSIS"
+        lines += "Power-supply root: " + if (rootVisible) "visible" else "not visible"
+        val supplies = nodes.keys.filter { it.startsWith("power_supply/") }.map { it.substringAfter("power_supply/").substringBefore("/") }.distinct()
+        val external = supplies.filter { it !in listOf("battery", "bms", "main") }
+        lines += "External power-supply entries: " + external.joinToString().ifBlank { "none discovered" }
+        var validPair = false
+        for (name in external) {
+            val base = name + "/"
+            val voltage = nodes[base + "voltage_now"]?.toLongOrNull()
+            val current = nodes[base + "current_now"]?.toLongOrNull()
+            lines += "Supply " + name + ": type=" + (nodes[base + "type"] ?: "not exported") + "; online=" + (nodes[base + "online"] ?: "not exported")
+            if (voltage != null && current != null && voltage in 1000000L..30000000L && kotlin.math.abs(current) <= 20000000L) {
+                validPair = true
+                lines += "  Candidate live VBUS/IBUS: " + String.format(Locale.US, "%.3f V / %.3f A", voltage / 1000000.0, current / 1000000.0)
+                lines += "  Candidate USB input power: " + String.format(Locale.US, "%.3f W", voltage.toDouble() * current.toDouble() / 1.0e12) + "; verify driver semantics"
+            } else {
+                lines += "  No same-supply live pair: voltage_now=" + (nodes[base + "voltage_now"] ?: "NOT EXPORTED") + "; current_now=" + (nodes[base + "current_now"] ?: "NOT EXPORTED")
+            }
+            val limits = listOf("input_voltage_limit", "input_current_limit", "input_power_limit", "constant_charge_current_max").mapNotNull { key -> nodes[base + key]?.let { key + "=" + it } }
+            if (limits.isNotEmpty()) lines += "  CONFIGURED LIMITS (not measurements): " + limits.joinToString()
+        }
+        if (!validPair) lines += "USB input V/A/W unavailable: no external supply exposed plausible voltage_now and current_now together to this app UID."
+        val usb = nodes.filterKeys { it.startsWith("typec/") || it.startsWith("usb_power_delivery/") || it.startsWith("dual_role_usb/") || it.startsWith("usb_role/") }
+        lines += "USB-C / Type-C / PD / role attributes discovered: " + usb.size
+        if (usb.isEmpty()) lines += "USB-C interface diagnosis: class absent, hidden by SELinux, or not enumerable by ordinary app UID."
+        val thermal = nodes.filterKeys { it.startsWith("thermal/") || it.startsWith("hwmon/") }
+        lines += "Thermal / hwmon attributes discovered: " + thermal.size
+        val denied = nodes.filterValues { it == "READ_DENIED" || it == "LIST_DENIED" || it.startsWith("ERROR:") }
+        lines += "Permission / read errors: " + denied.size
+        denied.entries.take(20).forEach { lines += "  " + it.key + " = " + it.value }
+        lines += "Shizuku audit: " + if (latestDiagnosticReport.isBlank()) "not run" else "available; inspect privileged UID and per-path results"
+        lines += "Root: not invoked automatically; no su prompt or root write attempted."
+        lines += "ADB shell: not available to ordinary app process; Shizuku UserService is the optional shell-UID route."
+        lines += "PDO capabilities, configured limits and VOOC flags are not classified as measured USB input power."
+        lines += "No kernel attributes were written."
+        return lines.joinToString("\n")
+    }
+
     private fun readSnapshot(): Reading {
         val intent = batteryIntent()
         val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
@@ -835,6 +875,8 @@ class MainActivity : Activity() {
             appendLine("Ordinary app sysfs: ${if (reading.supplyRootReadable) "directory visible; individual files may still be denied" else "not visible"}")
             appendLine("Shizuku audit: ${if (latestDiagnosticReport.isBlank()) "not run" else "available at ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(latestDiagnosticTimeMs))}"}")
             appendLine("Control writes: NEVER PERFORMED")
+            appendLine()
+            append(buildMeasurementDiagnosis(reading.supplies, reading.supplyRootReadable))
             append("Refresh: ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())} • 1 second")
         }
 
