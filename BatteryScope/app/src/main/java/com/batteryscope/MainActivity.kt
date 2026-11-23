@@ -480,6 +480,22 @@ class MainActivity : Activity() {
         }
 
         val statusReport = "${reading.status}   •   ${reading.percent?.let { "$it%" } ?: "--"}   •   POWER SOURCE: ${reading.plugged}"
+        val external = reading.supplies.filterKeys { key ->
+            val node = key.substringBefore('/').lowercase(Locale.US)
+            node !in listOf("battery", "bms", "main")
+        }
+        val batteryNodes = reading.supplies.filterKeys { key ->
+            val node = key.substringBefore('/').lowercase(Locale.US)
+            node in listOf("battery", "bms", "main")
+        }
+        fun batteryGaugeValue(field: String): Long? = batteryNodes.entries
+            .firstOrNull { it.key.substringAfterLast('/') == field }
+            ?.value?.toLongOrNull()
+        val kernelCycleCount = batteryGaugeValue("cycle_count")
+        val kernelFullChargeUah = batteryGaugeValue("charge_full")?.takeIf { it > 0L }
+        val kernelDesignChargeUah = batteryGaugeValue("charge_full_design")?.takeIf { it > 0L }
+        val kernelHealthPercent = if (kernelFullChargeUah != null && kernelDesignChargeUah != null)
+            kernelFullChargeUah.toDouble() / kernelDesignChargeUah.toDouble() * 100.0 else null
         val batteryReport = buildString {
             appendLine("Battery level          ${reading.percent?.let { "$it %" } ?: "Unavailable"}")
             appendLine("Battery voltage        ${reading.rawVoltageMv?.let { if (it in 2500..5000) "$it mV raw" else "$it mV raw — INVALID / outside expected battery range" } ?: "Unavailable"}")
@@ -500,22 +516,6 @@ class MainActivity : Activity() {
             append("Max charging voltage   ${reading.maxChargingVoltageUv?.let { String.format(Locale.US, "%.3f V (%d µV)", it / 1_000_000.0, it) } ?: "NOT REPORTED"}")
         }
 
-        val external = reading.supplies.filterKeys { key ->
-            val node = key.substringBefore('/').lowercase(Locale.US)
-            node !in listOf("battery", "bms", "main")
-        }
-        val batteryNodes = reading.supplies.filterKeys { key ->
-            val node = key.substringBefore('/').lowercase(Locale.US)
-            node in listOf("battery", "bms", "main")
-        }
-        fun batteryGaugeValue(field: String): Long? = batteryNodes.entries
-            .firstOrNull { it.key.substringAfterLast('/') == field }
-            ?.value?.toLongOrNull()
-        val kernelCycleCount = batteryGaugeValue("cycle_count")
-        val kernelFullChargeUah = batteryGaugeValue("charge_full")?.takeIf { it > 0L }
-        val kernelDesignChargeUah = batteryGaugeValue("charge_full_design")?.takeIf { it > 0L }
-        val kernelHealthPercent = if (kernelFullChargeUah != null && kernelDesignChargeUah != null)
-            kernelFullChargeUah.toDouble() / kernelDesignChargeUah.toDouble() * 100.0 else null
         val chargerReport = buildString {
             appendLine("App process sysfs access: ${if (reading.supplyRootReadable) "directory listed" else "denied / unavailable"}")
             appendLine("External power / charger nodes")
