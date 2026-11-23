@@ -685,9 +685,9 @@ class RecorderDatabase(context: Context) :
             if (dt <= 0L) continue
             intervals++
             intervalTotal += dt
-            if (dt > SAMPLE_INTERVAL_MS * 3) {
+            if (dt > BatteryRecorderService.SAMPLE_INTERVAL_MS * 3) {
                 gaps++
-                missingMs += (dt - SAMPLE_INTERVAL_MS).coerceAtLeast(0L)
+                missingMs += (dt - BatteryRecorderService.SAMPLE_INTERVAL_MS).coerceAtLeast(0L)
                 if (dt > longestMs) longestMs = dt
             }
         }
@@ -759,7 +759,7 @@ class RecorderDatabase(context: Context) :
             if (matches(row)) {
                 if (current.isNotEmpty()) {
                     val gap = row.time - current.last().time
-                    if (gap !in 1_000L..(SAMPLE_INTERVAL_MS * 3)) {
+                    if (gap !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) {
                         sessions += current
                         current = mutableListOf()
                     }
@@ -785,7 +785,7 @@ class RecorderDatabase(context: Context) :
                 val rate = if (elapsed > 0L) kotlin.math.abs(delta.toDouble()) / (elapsed / 3_600_000.0) else 0.0
                 val onMs = run.zipWithNext().sumOf { (a, b) ->
                     val dt = b.time - a.time
-                    if (dt in 1_000L..(SAMPLE_INTERVAL_MS * 3) && b.screen) dt else 0L
+                    if (dt in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3) && b.screen) dt else 0L
                 }
                 val counter = if (first.chargeCounter != null && last.chargeCounter != null)
                     (last.chargeCounter - first.chargeCounter) / 1000.0 else null
