@@ -932,7 +932,7 @@ class RecorderDatabase(context: Context) :
         val first = run.first(); val last = run.last()
         val initial = first.pct ?: return "Battery percentage unavailable."
         val current = last.pct ?: return "Battery percentage unavailable."
-        val elapsed = sampleIntervalMs(first, last)
+        val elapsed = observedDurationMs(run)
         if (elapsed <= 0L) return "Session duration unavailable."
         val change = current - initial
         val directionMatches = if (wantCharge) change > 0 else change < 0
