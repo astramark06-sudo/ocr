@@ -1,5 +1,11 @@
 # BatteryScope changelog
 
+## 1.9 — expanded measurement diagnosis
+- Ordinary-app read-only discovery now enumerates power-supply, Type-C, USB-PD, dual-role USB, USB-role, thermal and hwmon class attributes, preserving raw values and explicit read errors.
+- Added automatic measurement-access diagnosis that separates live same-supply voltage/current candidates from configured limits and reports missing/denied USB interfaces.
+- No sysfs writes are performed by the expanded automatic scan; Shizuku remains optional for shell-UID diagnostics.
+- Version code: 10.
+
 All versions are debug APK development builds unless a signed release is explicitly documented.
 
 ## 1.8 — expanded power-path discovery
