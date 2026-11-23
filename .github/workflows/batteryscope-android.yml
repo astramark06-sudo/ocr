@@ -4,11 +4,17 @@ on:
   push:
     branches: [batteryscope]
     paths:
-      - "BatteryScope/**"
+      - "BatteryScope/app/**"
+      - "BatteryScope/build.gradle.kts"
+      - "BatteryScope/settings.gradle.kts"
+      - "BatteryScope/gradle.properties"
       - ".github/workflows/batteryscope-android.yml"
   pull_request:
     paths:
-      - "BatteryScope/**"
+      - "BatteryScope/app/**"
+      - "BatteryScope/build.gradle.kts"
+      - "BatteryScope/settings.gradle.kts"
+      - "BatteryScope/gradle.properties"
       - ".github/workflows/batteryscope-android.yml"
   workflow_dispatch:
 
