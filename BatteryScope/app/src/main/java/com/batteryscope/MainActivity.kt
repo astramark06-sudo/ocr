@@ -1015,7 +1015,7 @@ class MainActivity : Activity() {
     private fun refreshHistoryDisplay(force: Boolean) {
         if (!::historyText.isInitialized || historyLoadInFlight) return
         val now = System.currentTimeMillis()
-        if (!force && now - historyUpdatedAtMs < 60_000L) return
+        if (!force && now - historyUpdatedAtMs < 300_000L) return
         historyUpdatedAtMs = now
         historyLoadInFlight = true
         Thread {
