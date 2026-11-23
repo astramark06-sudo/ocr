@@ -126,3 +126,11 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 
 - The Android workflow's APK verification step now runs `apksigner verify --verbose --print-certs` and saves the signing-certificate details alongside the APK SHA-256, package metadata and test report.
 - The workflow is configured but its result for the current branch head has not been confirmed through the available GitHub status interface. Do not claim CI passed or distribute an artifact until the exact run is inspected.
+
+
+## 2026-11-23 — BatteryManager unavailable-reason diagnostics
+
+- Live diagnostics now distinguish a BatteryManager unavailable sentinel from a SecurityException and other runtime exceptions for CURRENT_NOW, CURRENT_AVERAGE, CHARGE_COUNTER and ENERGY_COUNTER.
+- The dashboard separately reports whether ACTION_BATTERY_CHANGED was available and whether battery level, voltage and temperature extras were missing or invalid.
+- The recorder persists BatteryManager property-access status transitions as events (AVAILABLE, unavailable sentinel, security exception or exception class). It logs transitions only, not every 30-second sample, to avoid event spam.
+- No schema change. Exact hardware-path visibility still depends on the Realme ROM and ordinary-app SELinux permissions.
