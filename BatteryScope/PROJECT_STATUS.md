@@ -18,6 +18,7 @@ BatteryScope is a standalone Android application. It uses standard Android APIs 
 - `app/src/main/java/com/batteryscope/BatteryCapacityEstimator.kt` — pure estimator using charge-counter/SOC session deltas.
 - `app/src/main/java/com/batteryscope/BatteryRateMath.kt` — tested mA rate and SOC forecast calculations.
 - `app/src/main/java/com/batteryscope/BatteryPercentMath.kt` — validated battery level/scale conversion.
+- `app/src/main/java/com/batteryscope/BatteryMeasurementQuality.kt` — current-polarity and voltage-range validation before watt calculation.
 - `app/src/test/java/com/batteryscope/BatteryRateMathTest.kt` — pure calculation tests.
 - `app/src/test/java/com/batteryscope/BatteryPercentMathTest.kt` — missing/invalid percentage metadata tests.
 - `app/src/main/java/com/batteryscope/BatteryRecorderBootReceiver.kt` — automatic BOOT_COMPLETED and MY_PACKAGE_REPLACED resume attempt.
@@ -46,16 +47,16 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 
 ## Verification state
 
-- Source changes for version 1.15 / versionCode 16 have been committed to branch `batteryscope`.
+- Source version 1.15 / versionCode 16 is committed to branch `batteryscope`; app source commit used for the verified build is `480a567cd7c90f552976dc60472fa6ef11a5e126`.
 - Capacity estimator unit tests cover nominal capacity, small-SOC-change rejection, counter-direction mismatch and missing boot-count rejection.
 - Battery rate math unit tests cover battery-side mA calculations and SOC time forecasts; battery percentage math tests reject missing or invalid Android level/scale metadata.
 - Source-level checks completed: no Shizuku/privileged service references in MainActivity, recorder service, manifest or Gradle dependencies; CSV header/sample/event row alignment verified at 28 fields; isolated Kotlin arithmetic checks passed for battery-side mA and SOC forecasts.
 - Fixed a duplicate MainActivity lifecycle override that would have blocked Kotlin compilation. Recorder event writes and orderly database shutdown were moved off the Android main thread; the boot receiver no longer opens SQLite during BOOT_COMPLETED.
-- A dedicated GitHub Actions workflow builds/tests the app, verifies package/version metadata and APK signature, and uploads artifacts. The v1.14 run 45211411009 succeeded for commit 1e1660e; the v1.15 corrective commits require a new run.
+- The authoritative GitHub Actions workflow `batteryscope-android.yml` builds/tests the app, verifies package/version metadata and APK signature, and uploads artifacts. The duplicate legacy `batteryscope-build.yml` workflow was removed because it produced a second debug APK signed by a different ephemeral key.
 - BatteryManager property diagnostics distinguish unavailable sentinels, SecurityException and other exception classes. Version 1.15 additionally validates current polarity and voltage range, records quality transitions and excludes invalid values from battery-side wattage.
-- v1.14 Android Gradle build and 14 JVM tests passed in workflow run 45211411009. v1.15 adds eight measurement-quality tests; its full build/test result is pending the new workflow run.
-- v1.14 APK artifact verified: 913,390 bytes; SHA-256 ea9a9a1dac3c8dbe291534cda11f2e5173d7ae64073bb8d2140e786a957b036b; debug signer certificate SHA-256 3c75edb5262b17164453949bb90113e133edc2daeceb10846cd233d2be8194b5. v1.15 APK is pending.
-- No install or runtime test has been performed on the physical RMX2161. Compare signing-certificate digests before any update install.
+- v1.15 Android Gradle build and all 22 JVM tests passed in workflow run 45223861385. No failures, errors or skipped tests.
+- v1.15 APK verified: 914,326 bytes; SHA-256 `0c8f37eb4777b9ece9a1241a85e4805bab06dd5fd4b0bdde339f748c384b32ac`; CI artifact ID `14840939491`, ZIP SHA-256 `2c0b385d7416471e7c40817a5d2fe34aa05a2eaaf624307bfeebf001bb31195c`; run `45223861385`. Debug signer certificate SHA-256 `fe463192e3a055244ed627fbd8a8907f535263166e619c5bca686924b15094c2`.
+- No install or runtime test has been performed on the physical RMX2161. The v1.15 debug certificate (`fe463192…5094c2`) differs from the v1.14 debug certificate (`3c75edb5…194b5`); this APK cannot update that installation in place. Do not uninstall or overwrite the existing app/data.
 - Actual charge-counter availability and capacity-estimate accuracy on this handset remain unverified.
 
 ## Physical RMX2161 validation
@@ -73,7 +74,7 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 
 The product objective has expanded from battery-only monitoring to a permanent, local-first device telemetry platform. The full capability matrix, Android API/permission classification, history-import plan, RMX2161 device census, lifecycle design and phased acceptance gates are in [DEVICE_TELEMETRY_ARCHITECTURE.md](DEVICE_TELEMETRY_ARCHITECTURE.md).
 
-Source changes now request recorder startup automatically when the app resumes, resume on BOOT_COMPLETED and MY_PACKAGE_REPLACED, and remove the in-app Start/Stop controls and service stop action. The boot receiver no longer gates restart on the former user-enabled preference. The ongoing foreground notification remains. This lifecycle source change is not yet build-verified or tested on the RMX2161.
+Source changes now request recorder startup automatically when the app resumes, resume on BOOT_COMPLETED and MY_PACKAGE_REPLACED, and remove the in-app Start/Stop controls and service stop action. The boot receiver no longer gates restart on the former user-enabled preference. The ongoing foreground notification remains. This lifecycle source is CI build-verified in v1.15 but has not been tested on the physical RMX2161.
 
 Newly identified Android data sources for later implementation:
 - UsageStatsManager events and daily/weekly/monthly/yearly aggregates (requires user-granted Usage Access; detailed events expire after a few days).
@@ -85,10 +86,16 @@ Newly identified Android data sources for later implementation:
 The RMX2161's exact kernel exports, UsageStats/NetworkStats query behavior, SuperDart input telemetry, sensor inventory and Realme background policy remain unverified until an on-device capability report is collected. No new device-wide collector is marked implemented merely because its API has been identified.
 
 
-## Latest Android CI checkpoint — 2026-11-23
+## Historical Android CI checkpoint before v1.14 verification — 2026-11-23
 
 The dedicated Android build on commit `81286c706390d6c60d94a60428c8b298fa0651d2` failed during Kotlin compilation, not SDK setup. The exact compiler diagnostic was an unterminated string / incorrect template entry at `MainActivity.kt:407:204`. The offending bounded-kernel-scan warning string is fixed in commit `8463bb34afa81b2ba26e5598342ad8c5f798ce78`. A new APK workflow run (`45211353283`) was started for that commit and must be inspected before claiming build success. The failed run created no APK and uploaded no build artifact. General repository CI passed on the previous checkpoint; that does not validate the Android app.
 
+
+## Latest Android CI checkpoint — v1.15 — 2026-11-23
+
+The authoritative workflow [45223861385](https://github.com/astramark06-sudo/test/actions/runs/45223861385) succeeded for app source commit `480a567cd7c90f552976dc60472fa6ef11a5e126`. All 22 JVM tests passed; APK assembly, package/version verification, SHA-256 and v2 signature verification succeeded. Artifact ID `14840939491`; APK size 914,326 bytes; APK SHA-256 `0c8f37eb4777b9ece9a1241a85e4805bab06dd5fd4b0bdde339f748c384b32ac`; signer certificate SHA-256 `fe463192e3a055244ed627fbd8a8907f535263166e619c5bca686924b15094c2`.
+
+The v1.15 signer differs from the v1.14 debug signer. It is not update-compatible with the existing v1.14 installation. No install/overwrite was attempted. The duplicate legacy build workflow was removed after it produced a second APK with identical uncompressed contents but a different debug signature; `batteryscope-android.yml` is the authoritative build/verification workflow.
 
 ## Latest handset-export validation — 2026-11-23
 
@@ -106,3 +113,10 @@ Disposition: recorder and CSV persistence are demonstrated for this short sessio
 See [FORENSIC_AUDIT_2026-11-23.md](FORENSIC_AUDIT_2026-11-23.md) for the source-tree/APK integrity review and extended CSV findings. Version 1.15 now validates BatteryManager current direction against Android's documented convention, validates battery voltage in mV, prevents wattage calculation from invalid inputs, logs quality transitions, simplifies the main telemetry panel and retains UsageStats source event timestamps. Eight tests were added. No database schema migration or package identity change was made.
 
 **Still incomplete:** NetworkStatsManager, StorageStatsManager, SensorManager, ActivityManager memory, installed-app inventory, CPU/GPU collectors and other device-wide telemetry remain unimplemented. No physical-device or 24-hour continuity validation has been completed.
+
+
+## Extended handset-export validation — 2026-11-23
+
+The second user export contains 55 SAMPLE rows and 122 EVENT rows over about 46m23s. Battery level fell 83% to 74%; charge counter fell 3,735,000 to 3,330,000 µAh (405 mAh); temperature ranged 31.8–35.4 °C. Android recorded 52 NOT_CHARGING/NONE samples and three CHARGING/AC samples. During unplugged samples, current values were positive (14–674); during the three charging samples they were negative (-551 to -560). This conflicts with Android's documented current polarity. Voltage remains 3–4 in the mV-labelled field. Version 1.15 now flags both issues and refuses to calculate battery-side watts from them. It does not infer actual USB-input power.
+
+There were seven sample gaps longer than 90 seconds; the longest was 307.790 seconds. Four sampling-mode changes occurred. This remains insufficient to prove 24/7 continuity. The extended audit also confirms that device-wide NetworkStats, StorageStats, SensorManager, RAM, CPU/GPU and installed-app collectors remain unimplemented.
