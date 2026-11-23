@@ -570,7 +570,66 @@ class RecorderDatabase(context: Context) :
                 )
             }
         }
-        return BatteryCapacityEstimator.report(samples)
+        val empiricalReport = BatteryCapacityEstimator.report(samples)
+        val latestHardwareJson = readableDatabase.rawQuery(
+            "SELECT power_supply_json FROM samples WHERE power_supply_json IS NOT NULL ORDER BY timestamp_ms DESC LIMIT 1",
+            null
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+        val kernelReport = buildString {
+            appendLine("KERNEL FUEL-GAUGE CAPACITY / CYCLE REPORT")
+            if (latestHardwareJson == null) {
+                appendLine("No hardware-tree sample recorded yet. Start the recorder and wait for its first 120-second hardware inventory.")
+            } else {
+                val json = try { JSONObject(latestHardwareJson) } catch (_: Throwable) { JSONObject() }
+                fun findField(name: String): Pair<String, String>? {
+                    val keys = json.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        if (key.startsWith("power_supply/") && key.endsWith("/" + name)) {
+                            return key to json.optString(key)
+                        }
+                    }
+                    return null
+                }
+                val full = findField("charge_full")
+                val design = findField("charge_full_design")
+                val cycles = findField("cycle_count")
+                val fullUah = full?.second?.toLongOrNull()?.takeIf { it > 0L }
+                val designUah = design?.second?.toLongOrNull()?.takeIf { it > 0L }
+                if (fullUah != null) appendLine("Kernel full-charge capacity: ${String.format(Locale.US, "%.1f mAh", fullUah / 1000.0)} (${full!!.first})")
+                else appendLine("Kernel full-charge capacity: unavailable — " + kernelFieldReason(full, "charge_full", json))
+                if (designUah != null) appendLine("Kernel design capacity: ${String.format(Locale.US, "%.1f mAh", designUah / 1000.0)} (${design!!.first})")
+                else appendLine("Kernel design capacity: unavailable — " + kernelFieldReason(design, "charge_full_design", json))
+                if (fullUah != null && designUah != null) {
+                    appendLine("Kernel gauge-reported health: ${String.format(Locale.US, "%.1f%%", fullUah.toDouble() / designUah.toDouble() * 100.0)}")
+                } else {
+                    appendLine("Kernel gauge-reported health: unavailable — both charge_full and charge_full_design are required")
+                }
+                val cycleValue = cycles?.second?.toLongOrNull()
+                if (cycleValue != null) appendLine("Kernel charge cycle count: $cycleValue (${cycles!!.first})")
+                else appendLine("Kernel charge cycle count: unavailable — " + kernelFieldReason(cycles, "cycle_count", json))
+            }
+            append("Kernel gauge values are vendor/driver exports; verify units and meaning on the RMX2161 before treating them as calibrated capacity.")
+        }
+        return empiricalReport + "\\n\\n" + kernelReport
+    }
+
+    private fun kernelFieldReason(
+        field: Pair<String, String>?,
+        name: String,
+        json: JSONObject
+    ): String {
+        if (field != null) return when {
+            field.second == "READ_DENIED" -> "attribute exists but ordinary app read was denied"
+            field.second.startsWith("ERROR:") -> field.second
+            else -> "attribute value is not numeric: " + field.second
+        }
+        val root = json.optString("power_supply/@root")
+        return when (root) {
+            "READ_DENIED" -> "power_supply root is present but access was denied"
+            "ABSENT_OR_HIDDEN_BY_SELINUX" -> "power_supply root is absent or hidden by SELinux"
+            else -> "driver does not export the attribute, or the bounded inventory did not reach it"
+        }
     }
 
     fun historySummary(now: Long = System.currentTimeMillis()): String {
