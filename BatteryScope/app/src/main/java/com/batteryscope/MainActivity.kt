@@ -10,6 +10,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.BatteryManager
+import android.os.Build
+import android.provider.Settings
 import android.os.Bundle
 import android.os.IBinder
 import android.net.Uri
@@ -35,6 +37,8 @@ class MainActivity : Activity() {
     private lateinit var controlText: TextView
     private lateinit var coolDownStatusText: TextView
     private lateinit var statusText: TextView
+    private lateinit var historyText: TextView
+    private var historyUpdatedAtMs = 0L
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private val coolDownButtons = mutableListOf<Button>()
@@ -197,6 +201,8 @@ class MainActivity : Activity() {
         handler.post(sampler)
         updateShizukuAvailability()
         if (remoteService != null) startLiveLinkPolling()
+        updateRecorderControls()
+        refreshHistoryDisplay(true)
     }
 
     override fun onPause() {
@@ -279,6 +285,8 @@ class MainActivity : Activity() {
         }
         content.addView(controlLegend)
         diagnosticText = addPanel(content, "05  ACCESS, SOURCE & DATA QUALITY")
+        historyText = addPanel(content, "06  CHARGE / DISCHARGE HISTORY & APP USAGE")
+        historyText.text = "No recorder history yet. Start the all-day recorder to build daily, weekly and monthly data."
         val scanButton = Button(this).apply {
             text = "Run Shizuku power-path audit"
             setOnClickListener { startShizukuScan() }
@@ -300,11 +308,11 @@ class MainActivity : Activity() {
             setOnClickListener { refreshReadings() }
         }
         startButton = Button(this).apply {
-            text = "Start CSV log"
+            text = "Start all-day recorder"
             setOnClickListener { startLogging() }
         }
         stopButton = Button(this).apply {
-            text = "Stop & export CSV"
+            text = "Stop recorder"
             isEnabled = false
             setOnClickListener { stopLogging() }
         }
@@ -312,6 +320,22 @@ class MainActivity : Activity() {
         buttons.addView(startButton, LinearLayout.LayoutParams(0, -2, 1f))
         buttons.addView(stopButton, LinearLayout.LayoutParams(0, -2, 1f))
         content.addView(buttons)
+
+        val historyButtons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val usageButton = Button(this).apply {
+            text = "Enable app usage tracking"
+            setOnClickListener { openUsageAccessSettings() }
+        }
+        val exportButton = Button(this).apply {
+            text = "Export all history"
+            setOnClickListener { exportRecorderHistory() }
+        }
+        historyButtons.addView(usageButton, LinearLayout.LayoutParams(0, -2, 1f))
+        historyButtons.addView(exportButton, LinearLayout.LayoutParams(0, -2, 1f))
+        content.addView(historyButtons)
 
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -954,65 +978,77 @@ class MainActivity : Activity() {
     private fun csvEscape(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
 
     private fun startLogging() {
-        if (logging) return
         try {
-            val directory = getExternalFilesDir(null) ?: filesDir
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val file = File(directory, "BatteryScope_$timestamp.csv")
-            val writer = file.bufferedWriter(Charsets.UTF_8)
-            writer.write("timestamp_ms,battery_percent,battery_status,plug_type,battery_voltage_mv,battery_current_ua,battery_average_current_ua,charge_counter_uah,energy_counter_nwh,temperature_c,battery_health,technology,app_uid_sysfs_json")
-            writer.newLine()
-            writer.flush()
-            csvFile = file
-            csvWriter = writer
-            sessionTimestamp = timestamp
-            csvSampleCount = 0L
-            logging = true
+            val intent = Intent(this, BatteryRecorderService::class.java).setAction(BatteryRecorderService.ACTION_START)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             startButton.isEnabled = false
             stopButton.isEnabled = true
-            statusText.text = "CSV logging: ${file.name}"
-            refreshReadings()
+            statusText.text = "Starting persistent recorder. It samples every 30 seconds and saves history locally."
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), NOTIFICATION_REQUEST_CODE)
+            }
+            handler.postDelayed({ updateRecorderControls(); refreshHistoryDisplay(true) }, 1200L)
         } catch (t: Throwable) {
-            logging = false
-            startButton.isEnabled = true
-            stopButton.isEnabled = false
-            statusText.text = "CSV START FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+            statusText.text = "RECORDER START FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
+            updateRecorderControls()
         }
     }
 
     private fun stopLogging() {
-        logging = false
-        startButton.isEnabled = true
-        stopButton.isEnabled = false
-        var closeError: String? = null
         try {
-            csvWriter?.flush()
-            csvWriter?.close()
+            startService(Intent(this, BatteryRecorderService::class.java).setAction(BatteryRecorderService.ACTION_STOP))
+            statusText.text = "Recorder stop requested. Previously collected history remains stored."
         } catch (t: Throwable) {
-            closeError = "${t.javaClass.simpleName}: ${t.message ?: "close error"}"
-        } finally {
-            csvWriter = null
+            statusText.text = "RECORDER STOP FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
         }
-        val file = csvFile
-        val timestamp = sessionTimestamp
-            ?: SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        var reportFile: File? = null
+        handler.postDelayed({ updateRecorderControls(); refreshHistoryDisplay(true) }, 800L)
+    }
+
+    private fun updateRecorderControls() {
+        if (!::startButton.isInitialized || !::stopButton.isInitialized) return
+        val active = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
+            .getBoolean(BatteryRecorderService.KEY_ACTIVE, false)
+        startButton.isEnabled = !active
+        stopButton.isEnabled = active
+        if (active) statusText.text = "All-day recorder active • 30-second samples • local history database"
+    }
+
+    private fun openUsageAccessSettings() {
         try {
-            if (latestDiagnosticReport.isNotBlank() || latestLinkSnapshot.isNotBlank() || controlHistory.isNotEmpty()) {
-                val directory = getExternalFilesDir(null) ?: filesDir
-                reportFile = File(directory, "BatteryScope_${timestamp}-diagnostics.txt")
-                reportFile.writeText(
-                    "FULL SHIZUKU AUDIT\n$latestDiagnosticReport\n\nLATEST LIVE POWER-PATH SAMPLE\n$latestLinkSnapshot\n\nCONTROL ACTION HISTORY\n$controlHistory"
-                )
-            }
-            statusText.text = buildString {
-                appendLine(if (file != null) "CSV saved internally: ${file.name} ($csvSampleCount samples)" else "No CSV file was created.")
-                if (reportFile != null) appendLine("Diagnostics saved internally: ${reportFile.name}")
-                if (closeError != null) appendLine("CSV close warning: $closeError")
-            }.trim()
-            if (file != null && closeError == null) launchCsvExport(file)
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         } catch (t: Throwable) {
-            statusText.text = "EXPORT FAILED: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+            statusText.text = "Could not open Usage Access settings: " + (t.message ?: "unknown")
+        }
+    }
+
+    private fun refreshHistoryDisplay(force: Boolean) {
+        if (!::historyText.isInitialized) return
+        val now = System.currentTimeMillis()
+        if (!force && now - historyUpdatedAtMs < 60_000L) return
+        historyUpdatedAtMs = now
+        try {
+            val database = RecorderDatabase(this)
+            historyText.text = database.historySummary(now)
+            database.close()
+        } catch (t: Throwable) {
+            historyText.text = "History read failed: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
+        }
+    }
+
+    private fun exportRecorderHistory() {
+        try {
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val file = File(cacheDir, "BatteryScope_History_" + timestamp + ".csv")
+            val database = RecorderDatabase(this)
+            file.bufferedWriter(Charsets.UTF_8).use { database.exportCsv(it) }
+            database.close()
+            if (file.length() == 0L) {
+                statusText.text = "No telemetry history exists to export yet."
+                return
+            }
+            launchCsvExport(file)
+        } catch (t: Throwable) {
+            statusText.text = "HISTORY EXPORT FAILED: " + t.javaClass.simpleName + ": " + (t.message ?: "unknown")
         }
     }
 
@@ -1082,5 +1118,6 @@ class MainActivity : Activity() {
         private const val SHIZUKU_REQUEST_CODE = 4102
         private const val LINK_POLL_INTERVAL_MS = 2000L
         private const val CSV_EXPORT_REQUEST_CODE = 5101
+        private const val NOTIFICATION_REQUEST_CODE = 5102
     }
 }
