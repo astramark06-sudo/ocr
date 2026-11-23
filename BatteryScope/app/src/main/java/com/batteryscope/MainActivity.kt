@@ -103,6 +103,7 @@ class MainActivity : Activity() {
             remoteService = IBatteryDiagnosticsService.Stub.asInterface(binder)
             serviceBindingRequested = false
             runRemoteDiagnosticScan()
+            notifyRecorderShizukuEnabled()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -375,6 +376,17 @@ class MainActivity : Activity() {
         } else {
             val apiVersion = try { Shizuku.getVersion() } catch (_: Throwable) { -1 }
             setBridgeStatus("Shizuku connected • API $apiVersion. Privileged scan has not been run in this app session.")
+        }
+    }
+
+    private fun notifyRecorderShizukuEnabled() {
+        val active = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
+            .getBoolean(BatteryRecorderService.KEY_ACTIVE, false)
+        if (!active) return
+        try {
+            startService(Intent(this, BatteryRecorderService::class.java).setAction(BatteryRecorderService.ACTION_ENABLE_SHIZUKU))
+        } catch (t: Throwable) {
+            setBridgeStatus("Could not enable privileged history sampling: " + (t.message ?: "unknown"))
         }
     }
 
