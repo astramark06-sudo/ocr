@@ -612,11 +612,14 @@ class RecorderDatabase(context: Context) :
                 appendLine("Charging screen OFF: " + stats.chargeOffHours + " h • +" + stats.chargeOffPct + "% • " + stats.chargeOffRate + " %/h")
                 appendLine("Discharging screen ON: " + stats.drainOnHours + " h • -" + stats.drainOnPct + "% • " + stats.drainOnRate + " %/h")
                 appendLine("Discharging screen OFF: " + stats.drainOffHours + " h • -" + stats.drainOffPct + "% • " + stats.drainOffRate + " %/h")
+                appendLine("Battery decline while charger remains connected: " + stats.pluggedDrainHours + " h • -" + stats.pluggedDrainPct + "% • " + stats.pluggedDrainRate + " %/h")
+                appendLine("  Plugged decline screen ON: " + stats.pluggedDrainOnHours + " h • -" + stats.pluggedDrainOnPct + "% • " + stats.pluggedDrainOnRate + " %/h")
+                appendLine("  Plugged decline screen OFF: " + stats.pluggedDrainOffHours + " h • -" + stats.pluggedDrainOffPct + "% • " + stats.pluggedDrainOffRate + " %/h")
                 appendLine("Screen state samples: ON " + stats.screenOn + " • OFF " + stats.screenOff)
-                appendLine("Foreground app time + coincident charge/discharge change (approx.):")
+                appendLine("Foreground app time + coincident battery change (approx.):")
                 if (stats.apps.isEmpty()) appendLine("  unavailable / Usage Access not granted / not yet recorded")
                 else stats.apps.take(8).forEach { app ->
-                    appendLine("  " + app.name + ": " + app.minutes + " min foreground • +" + app.chargePct + "% during charging • -" + app.drainPct + "% during discharging")
+                    appendLine("  " + app.name + ": " + app.minutes + " min foreground • +" + app.chargePct + "% while charging • -" + app.drainPct + "% unplugged • -" + app.pluggedDrainPct + "% while connected")
                 }
             }
             appendLine()
