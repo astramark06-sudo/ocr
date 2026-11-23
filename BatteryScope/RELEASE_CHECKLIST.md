@@ -14,15 +14,15 @@ A source commit is not a release. Keep build verification, artifact integrity, i
 - [ ] Keep README.md, AUDIT.md, CHANGELOG.md, PROJECT_STATUS.md and this checklist consistent with the current code.
 - [ ] Preserve source paths and raw readings; missing/denied is not zero.
 - [ ] Check for secrets, device-private identifiers, APKs and build outputs in Git.
-- [ ] Add/update automated tests for arithmetic and state classification where feasible.
+- [x] Added eight measurement-quality tests; all 22 JVM tests pass.
 
 ## Build and artifact
-- [ ] Increment versionCode and update versionName for a release.
-- [ ] GitHub Actions Android build succeeds for the exact final commit.
-- [ ] APK package ID and version metadata are verified with aapt.
-- [ ] Workflow artifact is downloaded from that exact run.
-- [ ] Artifact ZIP integrity, APK entry, nonzero size and SHA-256 are verified.
-- [ ] Record the exact branch, commit, run ID/number, artifact name, APK size and APK SHA-256.
+- [x] Increment versionCode and update versionName: 1.15 / code 16.
+- [x] GitHub Actions Android build succeeds for app source commit 480a567cd7c90f552976dc60472fa6ef11a5e126 (run 45223861385).
+- [x] APK package ID and version metadata are verified with aapt: com.batteryscope / 1.15 / code 16.
+- [x] Workflow artifact 14840939491 downloaded from that exact run.
+- [x] Artifact ZIP integrity, APK entry, nonzero size and SHA-256 are verified.
+- [x] Recorded exact branch, commit, run, artifact, APK size and APK SHA-256 in FORENSIC_AUDIT_2026-11-23.md.
 - [ ] Verify install-over-update compatibility when device testing is available.
 
 ## Physical RMX2161 validation — required before claiming device-tested
@@ -31,7 +31,7 @@ A source commit is not a release. Keep build verification, artifact integrity, i
 - [ ] Confirm current polarity agrees with Android BatteryManager semantics during both charging and unplugged discharge; invalid values must be flagged and excluded from wattage.
 - [ ] Confirm raw voltage is a valid mV reading before battery-side wattage is displayed.
 - [ ] Confirm quality-transition events are present in CSV and foreground UsageStats events preserve source timestamps.
-- [ ] Compare the new APK signing certificate digest with the installed app before any in-place update.
+- [x] Compared v1.15 and v1.14 debug signing certificates; they differ, so in-place update is not safe.
 - [ ] Verify ordinary-app telemetry while unplugged and charging; unavailable paths remain explicitly unavailable.
 - [ ] Confirm USB source identity and validate any VBUS/IBUS paths and units.
 - [ ] Test recorder screen-off, multi-hour logging, notification, wake-lock power impact and gap diagnostics.
@@ -42,3 +42,13 @@ A source commit is not a release. Keep build verification, artifact integrity, i
 
 ## Final report
 Report the exact commit/version, workflow run, artifact and checksums. Mark unperformed checks explicitly. A successful CI build is not proof of physical-device correctness, 24-hour continuity or real charger-side measurements.
+
+
+## Verified v1.15 build record
+
+- Workflow: https://github.com/astramark06-sudo/test/actions/runs/45223861385
+- App source commit: `480a567cd7c90f552976dc60472fa6ef11a5e126`
+- APK SHA-256: `0c8f37eb4777b9ece9a1241a85e4805bab06dd5fd4b0bdde339f748c384b32ac`
+- Signer certificate SHA-256: `fe463192e3a055244ed627fbd8a8907f535263166e619c5bca686924b15094c2`
+- Existing v1.14 debug certificate: `3c75edb5262b17164453949bb90113e133edc2daeceb10846cd233d2be8194b5` — mismatch; do not install over the existing app.
+- Physical RMX2161 validation and stable production signing remain incomplete.
