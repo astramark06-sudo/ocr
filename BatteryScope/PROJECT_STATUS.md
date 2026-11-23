@@ -2,8 +2,8 @@
 
 Last audited source snapshot: 2026-11-23  
 Active branch: batteryscope  
-Current app version: 1.11  
-Current version code: 12  
+Current app version: 1.12  
+Current version code: 13  
 Application ID / namespace: com.batteryscope  
 Target handset: Realme Narzo 20 Pro (RMX2161), Android 12, non-rooted
 
@@ -37,12 +37,14 @@ The persistent recorder is a best-effort Android foreground service, not a hard 
 - The only write path remains the narrowly gated Oplus cool_down property, with model/path/range/charging/write/confirmation/read-back checks.
 
 ## Verification state
-- Source was updated and inspected on 2026-11-23; the cumulative code diff from the last known v1.8 checkpoint spans the app files and the recorder/AIDL/manifest work.
-- The previous v1.11 build for the pre-audit source snapshot (commit db9118677afc799ba78f1c651b73ee52cbc0db18, workflow run #147 / ID 45140341332) passed the Android 35 debug build and aapt package/metadata verification. It is superseded by the subsequent audit corrections.
-- The post-audit source build is running through the BatteryScope GitHub Actions workflow; use the exact final commit/run and artifact after it completes.
-- No APK has been installed or runtime-tested on the physical RMX2161 during this audit.
-- No actual RMX2161 VBUS/IBUS source path or current limit writeability is verified without a handset audit.
-- No automated Android unit/instrumentation test suite currently exists; CI compiles/packages the app but does not exercise service lifecycle or measurement arithmetic on a device.
+- Current source revision before the v1.12 patch: 4db9f0a2a914d5c80c14a94a1e3a5c41368e8fd2 (v1.11 / versionCode 12).
+- The v1.11 source had a verified GitHub Actions debug build: run #162 / ID 45146583835. Android 35 compilation and aapt package/metadata verification passed.
+- The v1.11 artifact archive digest was sha256:9e456d07ffdb3cab2b9a77c071648d05582111fb9ee1d38948501fd2d266f33d. This is the ZIP digest, not the APK's internal SHA-256.
+- The source audit found a CSV record-terminator defect and inconsistent wall-clock use in session screen-on duration. Version 1.12 centralizes CSV encoding, adds JVM unit tests and aligns screen-on interval calculation with monotonic-aware session duration.
+- CI now runs testDebugUnitTest before assembleDebug. The v1.12 CI result and artifact must be checked against the final commit before distribution.
+- No APK has been installed or runtime-tested on the physical RMX2161.
+- No actual RMX2161 VBUS/IBUS source path or current-limit writeability is verified without a handset audit.
+- No Android instrumentation/device test suite exists yet; JVM tests cover CSV row encoding only.
 
 ## Remaining device validation
 1. Install the final APK over the earlier package and confirm application ID/update compatibility.
