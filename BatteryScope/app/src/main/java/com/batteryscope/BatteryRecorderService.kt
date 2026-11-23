@@ -19,6 +19,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -31,7 +32,8 @@ import kotlin.math.abs
 
 /** User-started, persistent local recorder. No activity lifecycle owns this sampler. */
 class BatteryRecorderService : Service() {
-    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var handler: Handler
+    private lateinit var worker: HandlerThread
     private lateinit var db: RecorderDatabase
     private lateinit var batteryManager: BatteryManager
     private var batteryIntent: Intent? = null
@@ -68,6 +70,8 @@ class BatteryRecorderService : Service() {
         super.onCreate()
         db = RecorderDatabase(this)
         batteryManager = getSystemService(BATTERY_SERVICE) as BatteryManager
+        worker = HandlerThread("BatteryScopeRecorder").apply { start() }
+        handler = Handler(worker.looper)
         batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         createChannel()
         registerEvents()
@@ -84,8 +88,7 @@ class BatteryRecorderService : Service() {
             event(if (intent == null) "RECORDER_RESTARTED" else "RECORDER_STARTED",
                 "User-visible foreground recorder; sample interval " + SAMPLE_INTERVAL_MS + " ms")
             handler.removeCallbacks(sampler)
-            sample()
-            handler.postDelayed(sampler, SAMPLE_INTERVAL_MS)
+            handler.post(sampler)
         } catch (t: Throwable) {
             event("RECORDER_START_FAILED", t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
@@ -175,8 +178,9 @@ class BatteryRecorderService : Service() {
         val energy = longProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
         val screenOn = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive
         val activeApp = updateForegroundPackage(now)
-        if (now - lastSysfsReadMs >= SYSFS_INTERVAL_MS) {
-            lastSysfsJson = readPowerSupplyTree()
+        val refreshSysfs = now - lastSysfsReadMs >= SYSFS_INTERVAL_MS
+        if (refreshSysfs) {
+            lastSysfsJson = readHardwareTrees()
             lastSysfsReadMs = now
         }
         val usb = findUsbCandidate(lastSysfsJson)
@@ -197,7 +201,7 @@ class BatteryRecorderService : Service() {
             put("screen_on", if (screenOn) 1 else 0)
             put("foreground_package", activeApp ?: "")
             put("usage_access", if (hasUsageAccess()) 1 else 0)
-            put("power_supply_json", lastSysfsJson.toString())
+            if (refreshSysfs) put("power_supply_json", lastSysfsJson.toString())
             if (usb != null) {
                 put("usb_voltage_candidate_uv", usb.first)
                 put("usb_current_candidate_ua", usb.second)
@@ -257,45 +261,59 @@ class BatteryRecorderService : Service() {
         }
     }
 
-    private fun readPowerSupplyTree(): JSONObject {
+    private fun readHardwareTrees(): JSONObject {
         val result = JSONObject()
-        val root = java.io.File("/sys/class/power_supply")
-        if (!root.exists()) { result.put("@root", "NOT_PRESENT"); return result }
-        if (!root.canRead()) { result.put("@root", "READ_DENIED"); return result }
-        val attributes = listOf(
-            "type", "online", "present", "status", "health", "capacity", "voltage_now",
-            "voltage_avg", "voltage_max", "current_now", "current_avg", "current_max", "power_now",
-            "charge_counter", "charge_now", "charge_full", "charge_full_design", "temp",
-            "usb_type", "real_type", "charge_type", "input_current_limit", "input_current_limit_max",
-            "input_voltage_limit", "input_power_limit", "constant_charge_current",
-            "constant_charge_voltage", "constant_charge_current_max", "constant_charge_voltage_max",
-            "charge_control_limit", "charge_control_start_threshold", "charge_control_end_threshold",
-            "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update",
-            "chargerid_volt", "charger_ic", "cool_down"
+        val roots = listOf(
+            "/sys/class/power_supply" to 3,
+            "/sys/class/typec" to 4,
+            "/sys/class/usb_power_delivery" to 5,
+            "/sys/class/dual_role_usb" to 3,
+            "/sys/class/usb_role" to 3,
+            "/sys/class/thermal" to 3,
+            "/sys/class/hwmon" to 3
         )
-        try {
-            val supplies = root.listFiles()?.sortedBy { it.name } ?: emptyList()
-            var count = 0
-            for (supply in supplies) {
-                if (count >= MAX_SYSFS_FIELDS) break
-                if (!supply.isDirectory) continue
-                for (attribute in attributes) {
-                    if (count >= MAX_SYSFS_FIELDS) break
-                    val node = java.io.File(supply, attribute)
-                    if (!node.exists()) continue
-                    count++
-                    val value = try {
-                        if (!node.canRead()) "READ_DENIED" else node.readText().trim().take(240).ifBlank { "EMPTY" }
-                    } catch (t: Throwable) {
-                        "ERROR:" + t.javaClass.simpleName + ":" + (t.message ?: "unknown")
+        val skip = setOf("device", "subsystem", "driver", "power", "firmware_node", "of_node")
+        var count = 0
+        val maxFields = 900
+        for ((rootPath, maxDepth) in roots) {
+            val root = java.io.File(rootPath)
+            val prefix = root.name
+            if (!root.exists()) {
+                result.put(prefix + "/@root", "NOT_PRESENT")
+                continue
+            }
+            if (!root.canRead()) {
+                result.put(prefix + "/@root", "READ_DENIED")
+                continue
+            }
+            fun walk(directory: java.io.File, depth: Int) {
+                if (depth > maxDepth || count >= maxFields) return
+                val children = try { directory.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null }
+                if (children == null) {
+                    result.put(prefix + "/" + directory.path.removePrefix(root.path).trim('/') + "/@list", "LIST_DENIED")
+                    return
+                }
+                for (child in children) {
+                    if (count >= maxFields) break
+                    if (child.isDirectory) {
+                        if (child.name !in skip) walk(child, depth + 1)
+                    } else if (child.isFile) {
+                        count++
+                        val value = try {
+                            if (!child.canRead()) "READ_DENIED"
+                            else child.inputStream().bufferedReader().use { it.readLine()?.take(240) ?: "EMPTY" }
+                        } catch (t: Throwable) {
+                            "ERROR:" + t.javaClass.simpleName + ":" + (t.message ?: "unknown")
+                        }
+                        val relative = child.path.removePrefix(root.path).trim('/')
+                        result.put(prefix + "/" + relative, value)
                     }
-                    result.put(supply.name + "/" + attribute, value)
                 }
             }
-            result.put("@field_count", count)
-        } catch (t: Throwable) {
-            result.put("@scan_error", t.javaClass.simpleName + ":" + (t.message ?: "unknown"))
+            walk(root, 0)
+            if (count >= maxFields) break
         }
+        result.put("@field_count", count)
         return result
     }
 
@@ -340,6 +358,7 @@ class BatteryRecorderService : Service() {
         if (receiverRegistered) try { unregisterReceiver(receiver) } catch (_: Throwable) { }
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ACTIVE, false).apply()
         try { db.close() } catch (_: Throwable) { }
+        try { worker.quitSafely() } catch (_: Throwable) { }
         super.onDestroy()
     }
 
