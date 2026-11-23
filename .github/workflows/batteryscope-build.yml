@@ -56,6 +56,10 @@ jobs:
           test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
           test -s app/src/main/res/values/batteryscope_icon_colors.xml
 
+      - name: Run JVM unit tests
+        working-directory: BatteryScope
+        run: gradle --no-daemon --stacktrace testDebugUnitTest
+
       - name: Build debug APK
         working-directory: BatteryScope
         run: gradle --no-daemon --stacktrace assembleDebug
