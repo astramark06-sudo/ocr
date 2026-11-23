@@ -1072,10 +1072,10 @@ class RecorderDatabase(context: Context) :
             val counterDirectionValid = deltaCounter != null && if (wantCharge) deltaCounter > 0L else deltaCounter < 0L
             if (counterDirectionValid) {
                 if (screenBucketOn) {
-                    onCounterUah += kotlin.math.abs(deltaCounter!!)
+                    onCounterUah += deltaCounter!!
                     onCounterIntervals++
                 } else {
-                    offCounterUah += kotlin.math.abs(deltaCounter!!)
+                    offCounterUah += deltaCounter!!
                     offCounterIntervals++
                 }
             }
@@ -1095,14 +1095,18 @@ class RecorderDatabase(context: Context) :
         out.appendLine("Screen ON: " + durationText(onMs) + " • screen OFF: " + durationText(offMs))
         val onRateText = onRate?.let { String.format(Locale.US, "%.2f pp/h", it) } ?: "n/a"
         val offRateText = offRate?.let { String.format(Locale.US, "%.2f pp/h", it) } ?: "n/a"
-        val onCounterText = onCounterRate?.let { String.format(Locale.US, "%.0f mA battery-side", it) } ?: "n/a"
+        val onCounterText = onCounterRate?.let { String.format(Locale.US, "%+.0f mA battery-side", it) } ?: "n/a"
         val offCounterText = offCounterRate?.let { String.format(Locale.US, "%.0f mA battery-side", it) } ?: "n/a"
         val remaining = if (wantCharge) (100 - current).coerceAtLeast(0).toDouble() else current.coerceAtLeast(0).toDouble()
         val thresholdName = if (wantCharge) "100%" else "0%"
+        val onForecast = if (!directionMatches) "not projected: session direction inconsistent"
+            else onRate?.let { forecastDuration(remaining, String.format(Locale.US, "%.6f", it)) } ?: "not enough screen-ON data"
+        val offForecast = if (!directionMatches) "not projected: session direction inconsistent"
+            else offRate?.let { forecastDuration(remaining, String.format(Locale.US, "%.6f", it)) } ?: "not enough screen-OFF data"
         out.appendLine("Screen ON (active-use proxy): " + onRateText + " • " + onCounterText +
-            " • time to " + thresholdName + ": " + (onRate?.let { forecastDuration(remaining, String.format(Locale.US, "%.6f", it)) } ?: "not enough screen-ON data"))
+            " • time to " + thresholdName + ": " + onForecast)
         out.appendLine("Screen OFF (idle-use proxy): " + offRateText + " • " + offCounterText +
-            " • time to " + thresholdName + ": " + (offRate?.let { forecastDuration(remaining, String.format(Locale.US, "%.6f", it)) } ?: "not enough screen-OFF data"))
+            " • time to " + thresholdName + ": " + offForecast)
         val thresholds = if (wantCharge) listOf(50, 80, 90, 100) else listOf(80, 50, 20, 10, 0)
         out.appendLine(if (wantCharge) "Time from first recorded sample in this session to charge thresholds:" else "Time from first recorded sample in this session to discharge thresholds:")
         for (threshold in thresholds) {
