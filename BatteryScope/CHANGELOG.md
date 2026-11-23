@@ -76,3 +76,13 @@ All versions are debug APK development builds unless a signed release is explici
 ## 1.5 — Shizuku diagnostics baseline
 - Added Android battery telemetry, sysfs audit, Shizuku diagnostic service, live power-path sampling, conditional Oplus cool_down control, CSV logging and diagnostic text display.
 - Version code: 6.
+
+
+## 1.14 — Reliability hardening (2026-11-23)
+
+- Removed a duplicate Activity lifecycle override that would prevent Kotlin compilation.
+- Moved recorder event database writes from main-thread service/broadcast callbacks to the recorder worker thread.
+- Queued recorder database shutdown after pending worker operations.
+- Removed SQLite access from the boot-completed broadcast receiver; boot-resume failures are retained in preferences and surfaced in diagnostics.
+- Added a dedicated Android GitHub Actions build/test/APK-artifact workflow.
+- No application ID, versionCode or SQLite schema change in this hardening pass.
