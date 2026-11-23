@@ -416,27 +416,49 @@ class RecorderDatabase(context: Context) :
     }
 
     fun historySummary(now: Long = System.currentTimeMillis()): String {
-        val windows = listOf("24 HOURS" to 24L * 60 * 60 * 1000, "7 DAYS" to 7L * 24 * 60 * 60 * 1000, "30 DAYS" to 30L * 24 * 60 * 60 * 1000)
+        val windows = listOf(
+            "24 HOURS" to 24L * 60 * 60 * 1000,
+            "7 DAYS" to 7L * 24 * 60 * 60 * 1000,
+            "30 DAYS" to 30L * 24 * 60 * 60 * 1000,
+            "90 DAYS" to 90L * 24 * 60 * 60 * 1000,
+            "365 DAYS" to 365L * 24 * 60 * 60 * 1000,
+            "ALL TIME" to Long.MAX_VALUE
+        )
+        val allRows = readWindow(0L)
         return buildString {
             val total = readableDatabase.rawQuery("SELECT COUNT(*) FROM samples", null).use {
                 if (it.moveToFirst()) it.getLong(0) else 0L
             }
-            appendLine("LOCAL HISTORY • RAW SAMPLES RETAINED UNTIL USER DELETES APP DATA")
-            appendLine("Stored samples: " + total)
-            appendLine("App attribution is time-correlation, not direct per-app electrical measurement.")
+            appendLine("BATTERYSCOPE LOCAL HISTORY • RAW SAMPLES RETAINED UNTIL USER DELETES APP DATA")
+            appendLine("Stored samples: " + total + " • target sample interval: 30 seconds")
+            appendLine("App attribution is correlated/estimated from foreground time and coincident battery change; it is not a direct per-app electrical measurement.")
             for ((label, duration) in windows) {
-                val rows = readWindow(now - duration)
-                val stats = summarise(rows)
+                val rows = if (duration == Long.MAX_VALUE) allRows else readWindow(now - duration)
+                val s = summarise(rows)
                 appendLine()
-                appendLine(label + " • " + stats.count + " samples")
-                appendLine("Charging: " + stats.chargeHours + " h recorded • " + stats.chargedPct + " percentage points gained • " + stats.chargeRate + " %/h")
-                appendLine("Discharging: " + stats.dischargeHours + " h recorded • " + stats.dischargedPct + " percentage points lost • " + stats.dischargeRate + " %/h")
-                appendLine("Screen-on samples: " + stats.screenOn + " • screen-off samples: " + stats.screenOff)
-                if (stats.apps.isNotEmpty()) {
-                    appendLine("Foreground apps (approximate sampled time):")
-                    stats.apps.take(5).forEach { appendLine("  " + it.first + " • " + it.second / 60 + " min") }
-                } else appendLine("Foreground app history: unavailable / not yet recorded")
+                appendLine("=== " + label + " • " + s.count + " samples ===")
+                appendLine("Charging: " + s.chargeHours + " h • +" + s.chargedPct + " percentage points • " + s.chargeRate + " %/h")
+                appendLine("Discharging: " + s.dischargeHours + " h • -" + s.dischargedPct + " percentage points • " + s.dischargeRate + " %/h")
+                appendLine("Charge-counter gain/loss: +" + s.chargeGainMah + " / -" + s.chargeLossMah + " mAh (Android estimate)")
+                appendLine("Charging screen ON: " + s.chargeOnHours + " h • +" + s.chargeOnPct + "% • " + s.chargeOnRate + " %/h")
+                appendLine("Charging screen OFF: " + s.chargeOffHours + " h • +" + s.chargeOffPct + "% • " + s.chargeOffRate + " %/h")
+                appendLine("Discharging screen ON: " + s.drainOnHours + " h • -" + s.drainOnPct + "% • " + s.drainOnRate + " %/h")
+                appendLine("Discharging screen OFF: " + s.drainOffHours + " h • -" + s.drainOffPct + "% • " + s.drainOffRate + " %/h")
+                appendLine("Screen state samples: ON " + s.screenOn + " • OFF " + s.screenOff)
+                appendLine("Foreground app time + coincident discharge (approx.):")
+                if (s.apps.isEmpty()) appendLine("  unavailable / Usage Access not granted / not yet recorded")
+                else s.apps.take(8).forEach { app ->
+                    appendLine("  " + app.name + ": " + app.minutes + " min • " + app.drainPct + " percentage points lost during its foreground intervals")
+                }
             }
+            appendLine()
+            appendLine("=== MOST RECENT CHARGING SESSION ===")
+            appendLine(sessionReport(allRows, true))
+            appendLine()
+            appendLine("=== MOST RECENT DISCHARGING SESSION ===")
+            appendLine(sessionReport(allRows, false))
+            appendLine()
+            appendLine("Rate intervals longer than 90 seconds are excluded. Threshold times are resolved to the sample interval, not exact hardware event times.")
             val last = readableDatabase.rawQuery(
                 "SELECT timestamp_ms,battery_percent,battery_status,plug_type,foreground_package FROM samples ORDER BY timestamp_ms DESC LIMIT 1", null
             ).use { c ->
@@ -445,62 +467,164 @@ class RecorderDatabase(context: Context) :
                     (if (c.isNull(1)) "--" else c.getInt(1).toString() + "%") + " • " +
                     c.getString(2) + " • " + c.getString(3) + " • app=" + c.getString(4)
             }
-            appendLine()
             appendLine(last)
         }
     }
 
-    private data class Row(val time: Long, val pct: Int?, val state: String, val screen: Boolean, val app: String)
+    private data class Row(
+        val time: Long, val pct: Int?, val state: String, val plug: String,
+        val chargeCounter: Long?, val screen: Boolean, val app: String
+    )
+    private data class AppMetric(val name: String, val ms: Long, val drain: Double) {
+        val minutes: Long get() = ms / 60_000L
+        val drainPct: String get() = String.format(Locale.US, "%.1f", drain)
+    }
+    private data class Bucket(var ms: Long = 0L, var pct: Double = 0.0, var chargeCounterUah: Long = 0L)
     private data class Stats(
         val count: Int, val chargeHours: String, val dischargeHours: String,
-        val chargedPct: String, val dischargedPct: String, val chargeRate: String,
-        val dischargeRate: String, val screenOn: Int, val screenOff: Int,
-        val apps: List<Pair<String, Long>>
+        val chargedPct: String, val dischargedPct: String, val chargeRate: String, val dischargeRate: String,
+        val chargeGainMah: String, val chargeLossMah: String,
+        val chargeOnHours: String, val chargeOnPct: String, val chargeOnRate: String,
+        val chargeOffHours: String, val chargeOffPct: String, val chargeOffRate: String,
+        val drainOnHours: String, val drainOnPct: String, val drainOnRate: String,
+        val drainOffHours: String, val drainOffPct: String, val drainOffRate: String,
+        val screenOn: Int, val screenOff: Int, val apps: List<AppMetric>
     )
 
     private fun readWindow(from: Long): List<Row> {
         val rows = mutableListOf<Row>()
         readableDatabase.rawQuery(
-            "SELECT timestamp_ms,battery_percent,battery_status,screen_on,foreground_package FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
+            "SELECT timestamp_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
             arrayOf(from.toString())
         ).use { c ->
-            while (c.moveToNext()) rows += Row(c.getLong(0), if (c.isNull(1)) null else c.getInt(1), c.getString(2), c.getInt(3) == 1, c.getString(4) ?: "")
+            while (c.moveToNext()) rows += Row(
+                c.getLong(0), if (c.isNull(1)) null else c.getInt(1),
+                c.getString(2) ?: "UNKNOWN", c.getString(3) ?: "NONE",
+                if (c.isNull(4)) null else c.getLong(4), c.getInt(5) == 1, c.getString(6) ?: ""
+            )
         }
         return rows
     }
 
+    private fun charging(row: Row) = row.state == "CHARGING" && row.plug != "NONE"
+    private fun discharging(row: Row) = row.state == "DISCHARGING" && row.plug == "NONE"
+
+    private fun add(bucket: Bucket, duration: Long, pct: Double, counter: Long) {
+        bucket.ms += duration
+        bucket.pct += pct
+        bucket.chargeCounterUah += counter
+    }
+
     private fun summarise(rows: List<Row>): Stats {
-        var chargeMs = 0L
-        var dischargeMs = 0L
-        var charged = 0.0
-        var discharged = 0.0
-        var screenOn = 0
-        var screenOff = 0
-        val apps = linkedMapOf<String, Long>()
+        val charge = Bucket(); val drain = Bucket()
+        val chargeOn = Bucket(); val chargeOff = Bucket()
+        val drainOn = Bucket(); val drainOff = Bucket()
+        val appTime = linkedMapOf<String, Long>()
+        val appDrain = linkedMapOf<String, Double>()
+        var screenOn = 0; var screenOff = 0
         rows.forEach { if (it.screen) screenOn++ else screenOff++ }
         for (i in 1 until rows.size) {
-            val a = rows[i - 1]
-            val b = rows[i]
-            val dt = b.time - a.time
+            val before = rows[i - 1]; val after = rows[i]
+            val dt = after.time - before.time
             if (dt !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) continue
-            if (b.screen && b.app.isNotBlank()) apps[b.app] = (apps[b.app] ?: 0L) + dt
-            if (a.pct == null || b.pct == null) continue
-            val delta = (b.pct - a.pct).toDouble()
-            if (a.state == "CHARGING" && b.state == "CHARGING" && delta >= 0) {
-                chargeMs += dt
-                charged += delta
-            } else if (a.state == "DISCHARGING" && b.state == "DISCHARGING" && delta <= 0) {
-                dischargeMs += dt
-                discharged += -delta
+            if (after.screen && after.app.isNotBlank() && after.app == before.app)
+                appTime[after.app] = (appTime[after.app] ?: 0L) + dt
+            if (before.pct == null || after.pct == null) continue
+            val delta = (after.pct - before.pct).toDouble()
+            val counterDelta = if (before.chargeCounter != null && after.chargeCounter != null) after.chargeCounter - before.chargeCounter else 0L
+            if (charging(before) && charging(after) && delta >= 0.0) {
+                add(charge, dt, delta, counterDelta.coerceAtLeast(0L))
+                add(if (after.screen) chargeOn else chargeOff, dt, delta, counterDelta.coerceAtLeast(0L))
+            } else if (discharging(before) && discharging(after) && delta <= 0.0) {
+                add(drain, dt, -delta, (-counterDelta).coerceAtLeast(0L))
+                add(if (after.screen) drainOn else drainOff, dt, -delta, (-counterDelta).coerceAtLeast(0L))
+                if (after.screen && after.app.isNotBlank() && after.app == before.app)
+                    appDrain[after.app] = (appDrain[after.app] ?: 0.0) - delta
             }
         }
-        val ch = chargeMs / 3_600_000.0
-        val dh = dischargeMs / 3_600_000.0
+        fun h(b: Bucket) = b.ms / 3_600_000.0
         fun fmt(v: Double) = String.format(Locale.US, "%.2f", v)
-        return Stats(rows.size, fmt(ch), fmt(dh), fmt(charged), fmt(discharged),
-            if (ch > 0) fmt(charged / ch) else "n/a",
-            if (dh > 0) fmt(discharged / dh) else "n/a",
-            screenOn, screenOff, apps.entries.sortedByDescending { it.value }.map { it.key to it.value / 1000L })
+        fun hr(b: Bucket) = fmt(h(b))
+        fun rate(b: Bucket) = if (b.ms > 0) fmt(b.pct / h(b)) else "n/a"
+        return Stats(
+            rows.size, hr(charge), hr(drain), fmt(charge.pct), fmt(drain.pct), rate(charge), rate(drain),
+            fmt(charge.chargeCounterUah / 1000.0), fmt(drain.chargeCounterUah / 1000.0),
+            hr(chargeOn), fmt(chargeOn.pct), rate(chargeOn), hr(chargeOff), fmt(chargeOff.pct), rate(chargeOff),
+            hr(drainOn), fmt(drainOn.pct), rate(drainOn), hr(drainOff), fmt(drainOff.pct), rate(drainOff),
+            screenOn, screenOff,
+            appTime.entries.sortedByDescending { it.value }.map { AppMetric(it.key, it.value, appDrain[it.key] ?: 0.0) }
+        )
+    }
+
+    private fun sessionReport(rows: List<Row>, wantCharge: Boolean): String {
+        if (rows.isEmpty()) return "No samples recorded."
+        fun matches(row: Row) = if (wantCharge) charging(row) else discharging(row)
+        var end = rows.lastIndex
+        while (end >= 0 && !matches(rows[end])) end--
+        if (end < 0) return "No recorded session."
+        var start = end
+        while (start > 0) {
+            val gap = rows[start].time - rows[start - 1].time
+            if (!matches(rows[start - 1]) || gap !in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) break
+            start--
+        }
+        val run = rows.subList(start, end + 1)
+        if (run.size < 2) return "Session has only one sample; rate and duration are not yet measurable."
+        val first = run.first(); val last = run.last()
+        val initial = first.pct ?: return "Battery percentage unavailable."
+        val current = last.pct ?: return "Battery percentage unavailable."
+        val elapsed = last.time - first.time
+        if (elapsed <= 0L) return "Session duration unavailable."
+        val change = current - initial
+        val rate = kotlin.math.abs(change.toDouble()) / (elapsed / 3_600_000.0)
+        val counterDelta = if (first.chargeCounter != null && last.chargeCounter != null) last.chargeCounter - first.chargeCounter else null
+        val onMs = run.zipWithNext().sumOf { (a, b) ->
+            val dt = b.time - a.time
+            if (dt in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3) && b.screen) dt else 0L
+        }
+        val offMs = elapsed - onMs
+        val out = StringBuilder()
+        out.appendLine("Observed window: " + first.time + " → " + last.time)
+        out.appendLine("Level: " + initial + "% → " + current + "% • elapsed: " + durationText(elapsed))
+        out.appendLine("Average rate: " + String.format(Locale.US, "%.2f", rate) + " percentage points/hour")
+        if (counterDelta != null) out.appendLine("Charge-counter delta: " + String.format(Locale.US, "%+.1f mAh", counterDelta / 1000.0) +
+            " • " + String.format(Locale.US, "%.1f mAh/hour", kotlin.math.abs(counterDelta) / 1000.0 / (elapsed / 3_600_000.0)) + " (Android estimate)")
+        else out.appendLine("Charge-counter rate: unavailable")
+        out.appendLine("Screen ON: " + durationText(onMs) + " • screen OFF: " + durationText(offMs))
+        val thresholds = if (wantCharge) listOf(50, 80, 90, 100) else listOf(80, 50, 20, 10, 0)
+        out.appendLine(if (wantCharge) "Time from session start to charge thresholds:" else "Time from session start to discharge thresholds:")
+        for (threshold in thresholds) {
+            val crossing = thresholdTime(run, threshold, wantCharge)
+            val status = when {
+                (wantCharge && initial >= threshold) || (!wantCharge && initial <= threshold) -> "already at threshold at session start"
+                crossing != null -> durationText(crossing - first.time) + " observed"
+                rate > 0.0 && ((wantCharge && current < threshold) || (!wantCharge && current > threshold)) ->
+                    durationText(((kotlin.math.abs(threshold - current).toDouble() / rate) * 3_600_000.0).toLong()) + " estimated from current session average"
+                else -> "not reached / insufficient data"
+            }
+            out.appendLine("  " + threshold + "%: " + status)
+        }
+        if (wantCharge && last.state == "FULL") out.appendLine("Android full state observed at final sample.")
+        return out.toString().trim()
+    }
+
+    private fun thresholdTime(rows: List<Row>, threshold: Int, upward: Boolean): Long? {
+        for (i in 1 until rows.size) {
+            val before = rows[i - 1].pct ?: continue
+            val after = rows[i].pct ?: continue
+            if (upward && before < threshold && after >= threshold) return rows[i].time
+            if (!upward && before > threshold && after <= threshold) return rows[i].time
+        }
+        return null
+    }
+
+    private fun durationText(ms: Long): String {
+        val minutes = ms.coerceAtLeast(0L) / 60_000L
+        val days = minutes / (24 * 60)
+        val hours = (minutes / 60) % 24
+        val remaining = minutes % 60
+        return if (days > 0) days.toString() + "d " + hours + "h " + remaining + "m"
+        else if (hours > 0) hours.toString() + "h " + remaining + "m" else remaining.toString() + "m"
     }
 
     fun exportCsv(writer: Writer) {
