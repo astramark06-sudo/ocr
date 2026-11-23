@@ -49,7 +49,7 @@ Package: `com.batteryscope`
 - Battery decline while charger remains connected.
 - Recent charge/discharge session durations, SOC thresholds and historical time-to-full/time-to-empty estimates.
 - Each recent session also separates display-on and display-off SOC rates, signed battery-side mA rates when charge-counter deltas are valid, and separate time-to-100% / time-to-0% forecasts. Display state is only a proxy for active use; foreground-app correlation is separately labelled approximate.
-- App foreground time with coincident SOC movement. This is correlation, not per-app electrical energy/current.
+- App foreground time with coincident SOC movement and, when valid, charge-counter mAh movement. Attribution requires the same foreground package at both sample endpoints with the display on. This is correlation, not per-app electrical energy/current or causal attribution.
 - CSV export includes chronological samples/events, boot metadata and raw hardware tree snapshots.
 - SQLite schema v4 adds charger maximum current/voltage, battery-present, invalid-charger and optional cycle count without deleting v1/v2/v3 history.
 
