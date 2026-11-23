@@ -89,3 +89,5 @@ All versions are debug APK development builds unless a signed release is explici
 
 - Recent charging/discharging session reports now separate display-on/display-off SOC rates, signed battery-side mA rates and time-to-threshold estimates.
 - Per-app history now includes coincident charge-counter mAh movement when valid, explicitly labelled as foreground correlation rather than direct app power measurement.
+
+- Added per-property BatteryManager access diagnostics and persisted access-status transitions; battery percentage now requires valid level/scale metadata and reports the exact missing/invalid input.
