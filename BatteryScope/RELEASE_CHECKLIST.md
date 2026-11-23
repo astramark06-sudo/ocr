@@ -1,43 +1,40 @@
 # BatteryScope release checklist
 
-Use this checklist for every APK release. A source commit is not itself a release.
+A source commit is not a release. Keep build verification, artifact integrity, installation and physical-device validation as separate results.
 
-## Before editing
-- [ ] Confirm the active branch is `batteryscope`.
-- [ ] Read current source, audit and open diffs.
-- [ ] Identify impacted screens, data paths, AIDL contracts and shared helpers.
-- [ ] Keep the change scoped; preserve unrelated working features.
+## Before release
+- [ ] Confirm the active branch is batteryscope and inspect the complete diff from the previous verified checkpoint.
+- [ ] Check all app files, manifest permissions/components, AIDL signatures, Shizuku binding, database schema/export, foreground-service lifecycle and boot receiver.
+- [ ] Keep application ID / namespace com.batteryscope.
+- [ ] Do not alter the separate Python project at the repository root.
+- [ ] Do not weaken the exact Oplus cool_down safety guards.
 
 ## Source and documentation
-- [ ] Update the existing implementation rather than starting a replacement app.
-- [ ] Keep package/application ID `com.batteryscope`.
-- [ ] Update `AUDIT.md` for evidence, behavior or capability changes.
-- [ ] Update `README.md` for user-visible behavior or setup changes.
-- [ ] Update `CHANGELOG.md`.
-- [ ] Add/update automated checks where possible.
-- [ ] Check no secrets, device-private data, APKs or build outputs entered Git.
+- [ ] Keep README.md, AUDIT.md, CHANGELOG.md, PROJECT_STATUS.md and this checklist consistent with the current code.
+- [ ] Preserve source paths and raw readings; missing/denied is not zero.
+- [ ] Check for secrets, device-private identifiers, APKs and build outputs in Git.
+- [ ] Add/update automated tests for arithmetic and state classification where feasible.
 
 ## Build and artifact
-- [ ] Increment versionCode; update versionName.
-- [x] GitHub Actions build succeeds on the intended branch and commit (run #91; commit `700e6ac63be78f65a2d08b45bef367b79badef03`).
-- [x] Build job's APK verification step passes.
-- [x] Artifact upload succeeds.
-- [x] Download the artifact from that exact run.
-- [x] Inspect ZIP contents; confirm expected APK path and nonzero size.
-- [x] Compute SHA-256 and record it with the exact commit/run.
-- [x] CI aapt verification confirms manifest application ID `com.batteryscope` and APK metadata version 1.8 / versionCode 9.
-- [ ] Confirm artifact is installable as an update over the prior package when device testing is available.
+- [ ] Increment versionCode and update versionName for a release.
+- [ ] GitHub Actions Android build succeeds for the exact final commit.
+- [ ] APK package ID and version metadata are verified with aapt.
+- [ ] Workflow artifact is downloaded from that exact run.
+- [ ] Artifact ZIP integrity, APK entry, nonzero size and SHA-256 are verified.
+- [ ] Record the exact branch, commit, run ID/number, artifact name, APK size and APK SHA-256.
+- [ ] Verify install-over-update compatibility when device testing is available.
 
-## Device validation (report separately)
-- [ ] Install/update on RMX2161 / Android 12.
-- [ ] Check launcher icon and app launch.
-- [ ] Check telemetry while unplugged and while charging.
-- [ ] Compare raw values with Android system sources where available.
-- [ ] Test Shizuku permission, bind, audit and live polling.
-- [ ] Confirm unavailable/denied data never appears as zero.
-- [ ] Confirm control gates remain locked when write permission is absent.
-- [ ] Test CSV save, cancel, export and file contents.
-- [ ] Check log/report lifecycle and app restart behavior.
+## Physical RMX2161 validation — required before claiming device-tested
+- [ ] Install/launch and verify update compatibility.
+- [ ] Verify battery current/voltage/temperature/charge counter against system sources where available.
+- [ ] Run ordinary-app and Shizuku audits while unplugged and charging.
+- [ ] Confirm USB source identity and validate any VBUS/IBUS paths and units.
+- [ ] Test recorder screen-off, multi-hour logging, notification, wake-lock power impact and gap diagnostics.
+- [ ] Test reboot resume, force-stop behavior and Realme battery-management restrictions.
+- [ ] Test Usage Access and foreground-app attribution.
+- [ ] Test Shizuku recorder binding after Activity is closed.
+- [ ] Test CSV content, chronological ordering, timestamps, SAF export and persistence of app-private copy.
+- [ ] Confirm cool_down control stays locked unless every guard is satisfied; do not test writes unless explicitly intended by the device owner.
 
 ## Final report
-Report exact commit, version, workflow run, artifact name/size/hash and each verification result. Explicitly mark checks not performed. Never call a release device-tested based only on CI.
+Report the exact commit/version, workflow run, artifact and checksums. Mark unperformed checks explicitly. A successful CI build is not proof of physical-device correctness, 24-hour continuity or real charger-side measurements.

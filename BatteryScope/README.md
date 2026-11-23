@@ -1,102 +1,81 @@
 # BatteryScope 1.11 — Realme Narzo 20 Pro (RMX2161)
 
-## 1.9 measurement diagnosis
+BatteryScope is an evidence-first Android battery and charging-path diagnostic application. It collects Android framework battery data, read-only kernel power-supply and USB class attributes, optional Shizuku shell-UID diagnostics, and long-running local telemetry history.
 
-The ordinary app process now inventories read-only attributes across `/sys/class/power_supply`, `/sys/class/typec`, `/sys/class/usb_power_delivery`, `/sys/class/dual_role_usb`, `/sys/class/usb_role`, `/sys/class/thermal` and `/sys/class/hwmon`, with a bounded attribute count. The automatic diagnosis reports which roots were visible, external power-supply entries, whether a same-supply `voltage_now` + `current_now` pair is available, configured limits separately from live measurements, and examples of denied/error reads. A plausible same-node pair is labelled a candidate until the device driver's semantics are validated; it is not automatically asserted to be a measured USB contract.
+Application ID: com.batteryscope  
+Version: 1.11 (versionCode 12)  
+Target handset: Realme Narzo 20 Pro RMX2161, Android 12, non-rooted  
+Build toolchain: Java 17, Gradle 8.9, Android SDK 35
 
-The diagnosis explicitly states when ordinary-app access cannot see USB VBUS/IBUS, when no Type-C/PD class attributes are discoverable, and whether a Shizuku audit has been run. Root access is not invoked automatically and no root prompt is triggered. The expanded scan is read-only. Android BatteryManager values remain battery-side telemetry, not charger input measurements.
+## Measurement sources and interpretation
 
-BatteryScope is an evidence-first Android battery and charging-path diagnostic app. It shows values returned by Android and the handset's kernel, preserves source paths and raw values, and labels unavailable data as unavailable.
+Android framework telemetry includes state of charge, battery voltage, temperature, health, plug type, technology, instantaneous and average battery current, charge counter and energy counter where the fuel gauge exposes them. BatteryManager current and voltage are battery-side measurements. The app's battery-power calculation is a battery-side estimate, not USB adapter output power. Charge counter is remaining-charge estimate, not full-charge capacity (FCC); Android health GOOD is framework status, not a measured capacity-health percentage.
 
-## Battery telemetry
+The ordinary app process reads available class attributes under:
+- /sys/class/power_supply
+- /sys/class/typec
+- /sys/class/usb_power_delivery
+- /sys/class/dual_role_usb
+- /sys/class/usb_role
+- /sys/class/thermal
+- /sys/class/hwmon
 
-- State of charge, battery voltage, temperature, health, plug source and battery chemistry string from Android battery broadcasts.
-- Battery-side instantaneous and average current, charge counter and energy counter from BatteryManager.
-- Battery-side power estimate calculated from battery voltage × battery current. This is not USB charger input power.
-- Raw Android voltage and current properties are retained. Unavailable values are not replaced with zero or guessed.
+The app preserves source paths and raw values. Missing, unreadable and failed reads are not converted to zero. A same-supply voltage/current pair is considered a USB input candidate only when the supply name or its exported type identifies USB. It remains a candidate until the installed RMX2161 driver's semantics and units are confirmed on-device. Non-USB external supply pairs are reported separately.
 
-## Phone ↔ charger visibility
+USB-PD PDO/source/sink capability data describes advertised capabilities, not proof of an active selected contract. Oplus VOOC/SuperDart driver flags are internal driver state, not protocol packet capture or a direct measurement at the connector. BatteryScope does not decode the proprietary SuperDart wire handshake, select a USB-PD contract, alter charger protocol negotiation, or infer USB input watts from battery-side current.
 
-When Shizuku is running through Android Wireless debugging and BatteryScope is authorized:
+## Interactive Shizuku diagnostics
 
-- A full audit inventories readable attributes (not only a fixed whitelist) under /sys/class/power_supply, /sys/class/typec, /sys/class/usb_power_delivery, USB-role nodes, thermal zones and hardware-monitor sensor trees. It also captures dumpsys battery, usb, thermalservice and power output.
-- A lightweight live sampler polls discovered power-supply, Type-C, USB-PD, thermal and hardware-monitor attributes every two seconds while the app activity is in the foreground; the full Shizuku audit remains on demand.
-- The full audit also captures Android battery statistics from `dumpsys batterystats --charged`.
-- **Current limitation:** CSV sampling and Shizuku live polling still stop when the app activity pauses. This version is not yet a 24-hour background recorder; keep BatteryScope visible during collection until the persistent recorder is implemented.
-- The inventory uses bounded tree depth and per-tree output caps and skips generic device/subsystem/driver symlink branches to avoid traversing unrelated sysfs trees.
-- The ordinary app process also inventories all direct attributes exposed under each power-supply class entry; unreadable values are marked rather than silently omitted.
-- The app shows the exact sysfs source path and unmodified value. Oplus vendor enums remain raw unless their mapping is verified in the inspected source.
-- fastcharger is the Oplus VOOC-related UI/driver indicator; voocchg_ing is the driver fast-charge-in-progress flag; fast_chg_type is a driver-reported charger subtype. These are driver states, not measured VBUS/IBUS or a captured protocol handshake.
+Shizuku is optional and is not root. When Shizuku is running through Android Wireless debugging and BatteryScope has been authorized, the interactive UserService audit captures:
+- power_supply, Type-C, USB-PD, USB role, thermal and hwmon class trees;
+- non-serial USB device descriptors;
+- dumpsys battery, usb, thermalservice, power and batterystats --charged;
+- process UID, PID, SELinux context and device build identity.
 
-USB-PD source/sink capability records describe advertised capabilities; they do not prove the currently selected contract. The app does not capture electrical packets or proprietary SuperDart/VOOC wire traffic. A live sample is a kernel-state snapshot, not a protocol trace.
+The interactive live power-path panel polls while MainActivity is in the foreground. It is not a packet capture or oscilloscope trace. The full multi-section scan is on-demand.
 
-## Conditional Oplus current-limit control
+The background recorder has its own Shizuku UserService binding. When authorized, it stores a live read-only power-path snapshot every 120 seconds and a focused dumpsys batterystats --charged snapshot every 15 minutes. The complete multi-section scan is not repeatedly run in the background. If Shizuku disconnects or permission is unavailable, ordinary app telemetry continues and the privileged source is marked unavailable.
 
-The Oplus RM6785 reference kernel contains a COOL_DOWN power-supply property when CONFIG_OPLUS_SMART_CHARGER_SUPPORT is enabled. Its cool_down setter accepts level 0 (restore driver defaults) and levels 1–6 (discrete input-current limits). The reference source maps the normal / VOOC input caps as:
+## Conditional Oplus COOL_DOWN control
 
-| Level | Normal input cap | VOOC input cap |
-|---|---:|---:|
-| 1 | 500 mA | 1000 mA |
-| 2 | 900 mA | 1500 mA |
-| 3 | 1200 mA | 2000 mA |
-| 4 | 1500 mA | 2500 mA |
-| 5 | 2000 mA | 3000 mA |
-| 6 | 2000 mA | 3500 mA |
+The inspected RM6785 reference source defines a single Oplus cool_down property with levels 0–6. The reference level table is documented in AUDIT.md. Those values are driver input-current limits, not measured current and not a negotiated adapter profile. The installed retail firmware may differ from the reference source.
 
-These are reference-driver limit settings, not measured current and not the negotiated charger profile. Installed firmware may differ.
+The only write path in BatteryScope is the exact /sys/class/power_supply/battery/cool_down property. It remains gated by RMX2161 identity, node presence, read/write access, numeric current level 0–6, requested level 0–6, Android CHARGING status plus a connected power source, explicit user confirmation, a single property write and exact read-back. A read-back only verifies the driver setting. No arbitrary shell command, generic sysfs write, PMIC/I2C write, USB role change or proprietary protocol command is implemented. Unsafe Oplus controls such as MMI_CHARGING_ENABLE, STOP_CHARGING_ENABLE and OTG_SWITCH remain excluded.
 
-BatteryScope exposes those level buttons only when all live checks pass: the exact /sys/class/power_supply/battery/cool_down node exists, is readable, reports a numeric level within 0–6, and the Shizuku service process reports effective write access. It also requires Android and the battery sysfs node to report charging. A user must confirm the requested change. BatteryScope writes only the bounded value 0–6 to that one property, then reads it back. A successful read-back confirms the driver setting only; it does not prove the physical input current changed.
+## Continuous local recorder
 
-**Non-root limitation:** Shizuku started with Wireless debugging runs as ADB shell, not root. In the inspected Linux power-supply implementation, a writable property receives owner-write permission (S_IWUSR). A shell process normally does not own that root-owned sysfs file. If the live permission check fails, the controls remain disabled. BatteryScope does not try to bypass permissions.
+Start **Start all-day recorder** in the app. A foreground service owns sampling on a dedicated worker thread, independently of MainActivity visibility:
+- BatteryManager telemetry every 30 seconds.
+- Read-only power-supply, Type-C, USB-PD, USB role, thermal, hwmon and non-serial USB descriptor inventory every 120 seconds.
+- Power connection, battery state, screen on/off, battery-low and foreground-app transitions.
+- Optional foreground-app tracking after the user grants Android Usage Access.
+- Optional privileged Shizuku snapshots when Shizuku is running and authorized.
 
-The app deliberately does not write MMI_CHARGING_ENABLE (binary charging on/off that can terminate VOOC), STOP_CHARGING_ENABLE, OTG_SWITCH, USB power/data roles, PMIC/I²C registers or protocol commands. It cannot force VOOC/SuperDart, request an arbitrary negotiated voltage/current profile, or increase the charger's hardware capability.
+The recorder stores raw samples and events in a local SQLite database. The history panel provides 24-hour, 7-day, 30-day, 90-day, 365-day and all-time summaries, charge/discharge trends, charge-counter changes where available, screen-on/off comparisons, plugged-in battery decline, recent session timing, threshold observations/estimates, foreground-app correlation and sampling-gap diagnostics.
 
-Reference source: [EvilAnsh/kernel_realme_RM6785](https://github.com/EvilAnsh/kernel_realme_RM6785/tree/271e01b9109b6efde028e6011125b6328cda673a). This is a community kernel reference, not proof that every retail firmware build has identical code or permissions.
+The service holds a partial CPU wake lock while recording so normal deep CPU suspend is less likely to defer the 30-second sampler. This increases BatteryScope's own power consumption and may affect the battery-drain experiment being measured. The ongoing notification explains this; stop the recorder to release the lock.
 
-## Shizuku setup
+The recorder uses Android's specialUse foreground-service type with a descriptive subtype and attempts to resume after BOOT_COMPLETED only when the user left recording enabled. It cannot collect data while the phone is powered off, before user data becomes available, or when Android/Realme process restrictions, force-stop, permission changes or service failure prevent it from running. A timestamp gap does not reveal its exact cause. Continuous 24-hour operation is best-effort, not guaranteed.
 
-1. Install Shizuku from https://shizuku.rikka.app/.
-2. Start it using Android 12 Wireless debugging.
-3. Open BatteryScope and tap **Run Shizuku power-path audit**.
-4. Grant BatteryScope access in the Shizuku permission prompt.
-5. The full audit then runs and the live panel polls the exposed driver state every two seconds.
+Usage Access identifies foreground packages and approximate sampled foreground duration. Battery percentage/charge-counter change coincident with an app's foreground time is correlation, not direct per-app current or energy measurement. BatteryStats output is Android's system attribution, not an external per-app electrical meter.
 
-Shizuku is not root. The app displays the service UID and SELinux context so the diagnostic privilege level is explicit.
+## Exports and storage
 
-## Logging and exports
+**Export all history** streams sample and event rows to a CSV file in BatteryScope's private app storage and opens Android's document picker to copy it to a user-selected location. The CSV includes wall-clock timestamps, monotonic elapsedRealtime timestamps, source data and event rows ordered chronologically. The internal export file is stored in app-private exports storage, not a temporary cache. Raw SQLite history has no automatic retention cap; storage use grows with recording duration. Export important history before uninstalling or clearing app data.
 
-Start CSV logging to record Android battery telemetry. Stop & export opens Android's document picker and copies the CSV to the location you choose. An app-specific copy remains if you cancel or export fails. The separate text report containing the latest full Shizuku audit and latest live sample remains in app-specific storage. Control results are reported only after the requested sysfs value reads back successfully.
+The full Shizuku diagnostic report is shown in the app. A separate user-selected text-report export is not currently implemented.
 
-## Build
+## Permissions and setup
 
-The APK is built by GitHub Actions using Java 17, Gradle 8.9 and Android SDK 35. A successful build and uploaded artifact are required before a build is called installable.
+1. Install BatteryScope.
+2. Start the recorder from the app; allow notification visibility when Android asks.
+3. Grant Usage Access only if foreground-app tracking is needed.
+4. For privileged kernel/framework history, install/start Shizuku using Android Wireless debugging and grant BatteryScope access in Shizuku.
+5. Review Battery optimization settings. The app provides a shortcut, but the device/OEM may still impose its own background restrictions.
+6. Stop the recorder when collection is complete.
 
-See [AUDIT.md](AUDIT.md) for the source audit, units, control semantics and known limits. See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the repeatable build and validation gate.
+## Build and validation
 
+GitHub Actions builds a debug APK with Java 17, Gradle 8.9 and Android SDK 35, checks the package/application ID and launcher resources, runs aapt metadata verification, computes SHA-256 and uploads the APK plus BUILD-INFO.txt. A successful CI build proves compilation and package-metadata checks only. It does not prove installation, charger measurement semantics, boot-resume behavior, 24-hour continuity or Shizuku behavior on the physical RMX2161.
 
-## Persistent battery telemetry recorder
-Version 1.10 adds an optional user-started recorder independent of the app screen. It stores raw battery samples and system/app activity events in a local SQLite database, with CSV export. Samples are taken every 30 seconds; the power-supply sysfs inventory is refreshed every two minutes. The dashboard reports rolling 24-hour, 7-day and 30-day summaries.
-
-For foreground app tracking, grant BatteryScope **Usage Access** from the app's button. This records which app was in the foreground during sampled intervals; it does not provide a direct electrical measurement of that app's battery current. The recorder shows an ongoing foreground-service notification. It can be interrupted by force-stop, device power-off, OEM process management, permission changes or unavailable hardware interfaces.
-
-For charger input readings, check the separate Shizuku audit and measurement diagnosis. USB-side voltage/current candidates are retained with their sysfs source data but must not be treated as confirmed VBUS/IBUS until the RMX2161 driver semantics are validated.
-
-
-The recorder samples the Android battery APIs every 30 seconds and refreshes bounded power-supply, Type-C, USB-PD, USB-role, thermal and hwmon sysfs trees every 120 seconds. If Shizuku is running and BatteryScope has been authorized, the recorder binds its own read-only Shizuku UserService and stores periodic privileged power-path snapshots. This binding remains tied to the recorder service rather than the Activity.
-
-For best-effort screen-off sampling, the recorder holds a partial CPU wake lock while active. This prevents normal CPU suspend from deferring the sampling handler, but it increases BatteryScope's own battery consumption. The ongoing notification discloses this. Stop the recorder to release the wake lock.
-
-The history view includes 24-hour, 7-day, 30-day and 90-day summaries; charge/discharge session rates; screen-on/off rates; charge-counter deltas where supported; most recent session time to 50/80/90/100% or 80/50/20/10/0%; and per-app foreground-time correlation with coincident battery-level loss. Threshold times are sample-resolution observations or estimates, not exact hardware event times. App drain remains correlation, not direct per-app current measurement.
-
-
-## 1.11 continuous telemetry recorder
-
-The recorder is user-started and foreground-notification-backed. It samples core BatteryManager telemetry every 30 seconds on a dedicated worker thread, independent of the Activity, and stores raw samples/events in local SQLite. It refreshes class-tree telemetry every 120 seconds and, when Shizuku is running and authorized, stores privileged snapshots every 120 seconds plus a focused dumpsys batterystats --charged snapshot every 15 minutes.
-
-History reports 24-hour, 7-day, 30-day and 90-day summaries; recent charge/discharge session timing; charge-counter deltas where the fuel gauge exports them; screen-on/off charge/discharge rates; foreground-app time and coincident battery-level changes; and sampling gaps. Threshold times are sample-resolution observations or rate-based estimates. App-level drain is correlated with foreground time and is not a direct per-app current measurement.
-
-For screen-off sampling, the recorder holds a partial CPU wake lock while active. This improves sampling continuity but increases the app's own power consumption and can prevent deep CPU sleep. The ongoing notification states this. Stop recording to release the lock.
-
-When the user leaves recording enabled, BatteryScope attempts to resume after Android's boot-completed broadcast. The phone cannot be monitored while powered off, before user data is unlocked, or when Android/Realme restrictions prevent a restart. Force-stop, service termination, revoked permissions and Shizuku shutdown can still create gaps. The history view reports gap duration but cannot always infer its cause.
-
-Grant Usage Access for foreground app tracking. Grant Shizuku permission and keep Shizuku running for privileged kernel and dumpsys history. Ordinary app telemetry continues when Shizuku is unavailable.
+See AUDIT.md for implementation detail and safety boundaries, CHANGELOG.md for source history, PROJECT_STATUS.md for current verification state, and RELEASE_CHECKLIST.md for the release gate.

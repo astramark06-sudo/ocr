@@ -6,7 +6,7 @@ The ordinary app process now attempts bounded, read-only enumeration of power_su
 
 A same-node pair is only a candidate until the installed driver's exact semantics are confirmed. The app does not infer USB input power from battery current, does not treat PDO capabilities or limits as live measurements, does not invoke `su` or trigger a root prompt, and does not write sysfs. Shizuku remains the optional ADB-shell-UID path for a more privileged read-only audit. The actual availability of charger-side measurements still requires a runtime audit on the handset.
 
-Audit date: 2026-11-21
+Audit date: 2026-11-23
 Source revision: telemetry and export correction
 Target handset: Realme Narzo 20 Pro, RMX2161, Android 12, non-rooted
 Project branch: batteryscope
@@ -74,7 +74,7 @@ It reports readable port/partner power and data roles, port mode, charger online
 
 ### Live sampler
 
-After Shizuku connects, a lightweight sampler polls discovered power-supply, Type-C, USB-PD, thermal and hardware-monitor attributes every two seconds while the activity is in the foreground. It reports the last sample timestamp and raw source values. It does not execute dumpsys on every poll. The CSV sampler and this Shizuku live poll remain activity-bound; they stop when the activity pauses, so this version is not a 24-hour background recorder.
+After Shizuku connects, a lightweight sampler polls discovered power-supply, Type-C, USB-PD, thermal and hardware-monitor attributes every two seconds while the activity is in the foreground. It reports the last sample timestamp and raw source values. It does not execute dumpsys on every poll. The interactive Shizuku live panel remains activity-bound. Separately, BatteryRecorderService owns a persistent foreground recorder and a recorder-specific Shizuku UserService binding; the recorder samples framework values every 30 seconds, class-tree sysfs every 120 seconds and focused BatteryStats output every 15 minutes. The background recorder is best-effort, not guaranteed 24-hour continuity.
 
 A missing file or denied read is not represented as zero. The app displays "not exposed", "denied" or "unavailable", according to the evidence received.
 
@@ -178,7 +178,7 @@ The Oplus setter does not itself validate negative levels in the reference sourc
 - File paths are kept with raw values.
 - Live link snapshots are sampled state, not protocol packet capture.
 - Control requests are explicitly confirmed and read back.
-- CSV logs stream Android framework telemetry and ordinary-app sysfs snapshots to disk, with periodic flushes and close-on-stop/activity-destroy behavior. The text export contains the latest full Shizuku report, latest live link sample and control action history.
+- CSV logs stream Android framework telemetry and ordinary-app sysfs snapshots to disk, with periodic flushes and close-on-stop/activity-destroy behavior. The current UI displays the interactive Shizuku report; a separate user-selected text-report export is not implemented. CSV export comes from the SQLite sample/event history.
 
 ## 7. CI and release acceptance
 
@@ -193,7 +193,7 @@ Release acceptance requires:
 - No unavailable value becomes zero.
 - COOL_DOWN buttons remain disabled without the exact live writable node and all guards.
 - Any permitted control action returns exact read-back; physical input current is not claimed without an independent measurement.
-- CSV and audit export complete.
+- CSV export completes and retains an app-private copy. A separate diagnostic text-report file export is not currently implemented.
 
 ## 8. Known limits
 
@@ -213,19 +213,19 @@ Release acceptance requires:
 - The service uses the Android foreground-service type `specialUse` with an explicit subtype declaration and an ongoing notification. Android 14+ requires an appropriate declared type and permission; Google Play review may require a justification for this service type.
 - The service samples core Android battery values every 30 seconds and refreshes ordinary-app power-supply sysfs attributes every 120 seconds.
 - SQLite stores raw samples and event rows locally. There is no automatic raw-history deletion in this milestone. The app exports all stored sample and event rows to CSV.
-- START_STICKY allows Android to recreate the service after some process deaths. It does not guarantee survival after force-stop, reboot, power-off, OEM battery management or user termination. No boot auto-start is configured in this milestone.
+- START_STICKY allows Android to recreate the service after some process deaths. It does not guarantee survival after force-stop, reboot, power-off, OEM battery management or user termination. v1.11 adds a BOOT_COMPLETED receiver that attempts to resume only when the user left recording enabled. It cannot observe powered-off time, and platform/OEM restrictions may still block resume.
 
 ### Usage and attribution
 - `PACKAGE_USAGE_STATS` is a special access permission granted manually from Android Settings.
 - When granted, BatteryScope records foreground package transitions and the package associated with each sampled interval, plus whether the screen was interactive.
 - Foreground duration is approximate at the 30-second sampling resolution.
-- The current implementation does not measure a per-app electrical current. Any later drain correlation must be labelled estimated/correlated, not direct measurement.
+- The current implementation does not measure a per-app electrical current. Foreground app time and coincident battery percentage/charge-counter changes are correlation/estimates, not direct measurements.
 - Android BatteryStats attribution remains a separate source and requires Shizuku access to dumpsys output. The recorder now binds its own Shizuku UserService for the lifetime of the foreground recorder, after explicit user authorization; the Activity can bind separately for interactive audit controls.
 
 ### Analytics limits
-- Rolling 24-hour, 7-day and 30-day summaries report charge/discharge time represented by valid adjacent samples and net percentage change per recorded hour.
+- Rolling 24-hour, 7-day, 30-day, 90-day, 365-day and all-time summaries report charge/discharge time represented by valid adjacent samples and net percentage change per recorded hour.
 - Gaps longer than three sample intervals are excluded from rate-duration calculations to avoid treating recorder downtime as a measured charge/discharge interval.
-- This milestone does not yet calculate complete per-session time-to-50/80/90/100/full, 100-to-20/10/empty or robust charger-vs-usage comparisons. Those require session segmentation and milestone interpolation over the stored history.
+- This was the v1.10 milestone limitation. v1.11 adds a recent-session ledger and observed/estimated threshold timing; projections are suppressed when the measured percentage trend contradicts the charging/discharging state.
 - App foreground intervals are not app energy attribution.
 - USB sysfs values are candidate source telemetry only; the exact RMX2161 path and driver units must be verified on-device.
 
@@ -254,3 +254,29 @@ Release acceptance requires:
 - App-level drain figures are time-correlated estimates, not direct per-app electrical measurements. BatteryStats dumpsys is an Android/system attribution estimate, not a meter inserted per app.
 - Intervals longer than 90 seconds are excluded from rate calculations. The dashboard reports gap count, estimated uncovered duration, longest gap and average interval. A timestamp gap alone cannot prove whether the cause was force-stop, powered-off state, OS/OEM process management, Doze or a permission/source failure.
 
+
+
+## 10. v1.11 source-level audit corrections and recorder limits
+
+- MainActivity still updates Android BatteryManager values at one-second UI cadence, but its ordinary-app sysfs inventory is cached for 15 seconds to avoid traversing class trees on every display refresh.
+- Ordinary-app USB V/I diagnostics classify a candidate as USB only when the external supply name or exported supply type identifies USB. A numeric pair on an unrelated external supply is reported as non-USB and is not called VBUS/IBUS.
+- The background recorder samples at a 30-second target cadence. It refreshes class-tree attributes every 120 seconds, and its independently authorized Shizuku binding stores live link snapshots at that interval plus dumpsys batterystats --charged every 15 minutes. The full multi-section Shizuku scan is on demand, not a periodic 15-minute operation.
+- Sample records keep both timestamp_ms (wall clock) and elapsed_realtime_ms (monotonic since boot). Duration/rate/gap calculations prefer monotonic differences within one boot and fall back to wall time across a reboot. Wall-clock timestamp remains the database order and sample key; device clock corrections can still complicate chronology.
+- Session threshold predictions are only made when the observed battery-percentage trend has the expected direction. A battery decline during CHARGING state or increase during DISCHARGING state is reported as contradictory state/trend evidence, not converted into an invalid threshold forecast.
+- A plugged/charging-decline interval is included when both samples report a connected plug source or both samples retain Android CHARGING status. This handles ROMs that temporarily publish EXTRA_PLUGGED=NONE while the battery status remains CHARGING. It is evidence of a state/source mismatch, not proof of the electrical source or USB power level.
+- CSV includes elapsedRealtime and merges sample/event rows by timestamp. The export source file is retained under app-private exports storage before the Android document-picker copy.
+- SQLite raw history has no automatic retention/rotation policy. It grows with recording time and with retained raw JSON/Shizuku snapshots; the user must export important history before clearing app data or uninstalling.
+- The database schema is currently version 1. Future schema additions require explicit migrations; onUpgrade does not currently perform a migration.
+- A shared database lock prevents recorder sample/event writes racing the close operation during service destruction.
+- The service holds a partial CPU wake lock for the user-enabled recording interval. This reduces CPU-suspend gaps but raises BatteryScope's own drain and changes the workload being measured. The notification discloses the wake lock.
+- The service uses foregroundServiceType=specialUse and a declared subtype. Android/Google Play policy may require justification for distribution; CI does not establish store-policy approval.
+- Boot resume is a best-effort BOOT_COMPLETED attempt using persisted user intent. It does not record time while powered off or guarantee service resurrection against force-stop or vendor process management.
+- No physical RMX2161 installation/runtime test has been performed in this audit. CI compile/package success is not evidence that the retail kernel exports valid USB VBUS/IBUS paths or that the recorder survives real 24-hour use.
+
+### Export schema
+
+CSV record rows use a record_type field with SAMPLE or EVENT. SAMPLE rows contain wall-clock timestamp_ms, monotonic elapsed_realtime_ms, BatteryManager readings, screen state, foreground package, Usage Access state, raw sysfs/Shizuku JSON, and candidate USB source values. EVENT rows contain timestamp, event_type and details. The event and sample records are emitted in timestamp order. Per-app attribution remains correlation only.
+
+### Audit verification scope
+
+The source audit compares fetched Git blob identifiers and byte lengths with the recursive Git tree for the BatteryScope subtree and associated workflows. The exact final source snapshot, file inventory, commit, build and APK digest are recorded in the separate byte-audit report. No source-level inspection can substitute for installing and exercising the application on the target handset.

@@ -1,69 +1,46 @@
-## 1.11 — continuous recorder, session analytics and privileged history
-- Added a user-started foreground telemetry recorder on a dedicated worker thread, independent of Activity visibility and task swipes.
-- Added local SQLite sample/event history, 30-second framework sampling and 120-second bounded power-supply, Type-C, USB-PD, USB-role, thermal and hwmon inventories.
-- Added optional Shizuku service binding for recurring read-only power-path snapshots and 15-minute focused dumpsys batterystats --charged snapshots; the complete multi-section framework audit remains on demand.
-- Added 24-hour, 7-day, 30-day and 90-day summaries; session charge/discharge rates; mAh-rate estimates where charge-counter readings are valid; screen-on/off comparison; app foreground time and correlated charge/discharge deltas.
-- Added observed/estimated time to charging thresholds 50/80/90/100% and discharge thresholds 80/50/20/10/0%, plus sampling-gap counts, longest gap and uncovered-time estimate.
-- Added partial CPU wake lock while recording to reduce deep-sleep sampling gaps; the ongoing notification explains that this increases BatteryScope's own power use. The lock is released on stop/destroy.
-- Added opt-in resume after boot when the user had left the recorder active; powered-off time remains unrecorded and Android/OEM restrictions may prevent automatic restart.
-- Added battery-optimisation settings shortcut and Usage Access settings shortcut.
-- App-level battery use remains an estimate/correlation, not direct per-app electrical measurement. Charger input candidates are not asserted as confirmed VBUS/IBUS without RMX2161 driver validation.
-- Version code: 12.
-
 # BatteryScope changelog
 
+All versions are debug APK development builds unless a signed release is explicitly documented. Source changes and CI builds do not imply physical-handset testing.
+
+## 1.11 — continuous recorder, session analytics and privileged history
+- Added a user-started foreground recorder on a dedicated HandlerThread, independent of MainActivity visibility and Activity pause/destroy.
+- Added a local SQLite sample/event store with 30-second Android battery sampling and 120-second bounded power_supply, Type-C, USB-PD, USB-role, thermal, hwmon and non-serial USB descriptor inventories.
+- Added a recorder-owned optional read-only Shizuku UserService binding; saves power-path snapshots every 120 seconds and focused dumpsys batterystats --charged snapshots every 15 minutes. The complete audit remains on-demand.
+- Added 24-hour, 7-day, 30-day, 90-day, 365-day and all-time streaming summaries; recent charge/discharge session ledgers; charge-counter changes; screen-on/off rates; plugged-in battery decline; app foreground correlation; threshold timing; and sampling-gap diagnostics.
+- Uses monotonic elapsedRealtime for sample interval calculations within a boot, with wall-clock fallback across reboot.
+- Prevents threshold projections when battery movement contradicts the CHARGING/DISCHARGING state.
+- Added partial CPU wake lock during user-requested recording to reduce deep-sleep gaps; notification discloses that this increases the app's own power use.
+- Added user-intent-based attempt to resume after BOOT_COMPLETED; powered-off time remains unrecorded and OS/OEM restrictions can prevent resume.
+- Added Usage Access and battery-optimization settings shortcuts.
+- Added durable app-private CSV export with chronological event/sample merge and wall-clock plus monotonic timestamps.
+- USB input candidates now require USB-named or USB-typed supply identity; unrelated external supply V/I pairs are not labelled VBUS/IBUS.
+- App-level drain remains correlation, not direct per-app electrical measurement. Hardware semantics and background continuity remain subject to RMX2161 runtime testing.
+- Version code: 12.
+
+## 1.10 — initial persistent telemetry recorder milestone
+- Added a user-started foreground service, SQLite raw history, Usage Access correlation, event capture and CSV export.
+- Version code: 11. Superseded by 1.11.
+
 ## 1.9 — expanded measurement diagnosis
-- Ordinary-app read-only discovery now enumerates power-supply, Type-C, USB-PD, dual-role USB, USB-role, thermal and hwmon class attributes, preserving raw values and explicit read errors.
-- Added automatic measurement-access diagnosis that separates live same-supply voltage/current candidates from configured limits and reports missing/denied USB interfaces.
-- No sysfs writes are performed by the expanded automatic scan; Shizuku remains optional for shell-UID diagnostics.
+- Expanded ordinary-app read-only discovery across power-supply, Type-C, USB-PD, dual-role USB, USB-role, thermal and hwmon class attributes.
+- Added automatic diagnosis distinguishing live candidates, configured limits and denied/missing data.
 - Version code: 10.
 
-All versions are debug APK development builds unless a signed release is explicitly documented.
-
 ## 1.8 — expanded power-path discovery
-- Shizuku full audit now inventories readable attributes under power-supply, Type-C, USB-PD, USB-role, thermal-zone and hardware-monitor class trees rather than relying only on a fixed property-name whitelist.
-- Live Shizuku snapshots include discovered attributes from these class trees, subject to explicit depth and output caps.
-- Added Android thermal-service and power-service dumpsys sections to the full audit.
-- The ordinary app process now inventories all direct attributes exposed under each power-supply class entry; unreadable and failed reads remain explicitly labelled.
-- Preserved raw values, source paths and the read-only charging-control boundary.
+- Expanded Shizuku and ordinary-app sysfs inventory.
+- Added thermalservice and power-service dumpsys output.
 - Version code: 9.
 
 ## 1.7 — launcher identity
-- Added Android adaptive launcher icon and round-icon resource.
-- Configured manifest launcher icon references.
-- Preserved package identity `com.batteryscope`.
+- Added adaptive launcher icon resources and preserved application ID com.batteryscope.
 - Version code: 8.
 
 ## 1.6 — telemetry labelling and CSV export
-- Marked Android battery voltage outside 2500–5000 mV as invalid in the UI and excluded it from the battery-side power estimate.
-- Clarified that charge counter is an Android remaining-charge estimate, not full-charge capacity.
-- Clarified that Android battery health is framework status, not capacity health.
-- Added Android Storage Access Framework document-picker export for CSV files. The app-specific copy remains if export is cancelled or fails.
+- Marked implausible Android battery voltages invalid in the UI and excluded them from battery-side power estimation.
+- Clarified charge counter and Android health limitations.
+- Added Storage Access Framework export for CSV.
 - Version code: 7.
 
 ## 1.5 — Shizuku diagnostics baseline
-- Included Android battery telemetry, sysfs audit, Shizuku diagnostic service, live power-path sampling and conditional Oplus `cool_down` control.
-- Added CSV session logging and diagnostic text report.
+- Added Android battery telemetry, sysfs audit, Shizuku diagnostic service, live power-path sampling, conditional Oplus cool_down control, CSV logging and diagnostic text display.
 - Version code: 6.
-
-## Release notes
-- This changelog records the verified source changes represented by the repository history; it does not imply that every version was installed or device-tested.
-- Consult `AUDIT.md` for measurement provenance, safety guards and known limitations.
-
-
-## 1.10 — persistent telemetry recorder (development milestone)
-- Added a user-started foreground service so sampling is no longer tied to MainActivity visibility.
-- Samples Android battery status, percentage, voltage, temperature, current, average current, charge counter, energy counter, health, plug type and technology every 30 seconds.
-- Captures readable power-supply sysfs attributes on a slower two-minute interval; preserves raw values and does not label vendor states or configured limits as measured input power.
-- Records power connection/disconnection, screen on/off, battery-low and foreground-app transition events.
-- Added optional Android Usage Access tracking for the foreground package, screen state and sampled foreground duration.
-- Added local SQLite raw history, 24-hour/7-day/30-day summary windows and full-history CSV export.
-- Recorder is user-started and displays an ongoing notification. START_STICKY supports service recreation, but force-stop, power-off, OEM process restrictions and denied permissions can still interrupt recording.
-- App-level drain is not measured electrically; foreground-app intervals are correlation data only.
-- Version code: 11.
-
-
-- Added session analytics: charge/discharge percentage rates, charge-counter change where available, screen-on versus screen-off rates, recent-session threshold times, and foreground-app-correlated discharge.
-- Extended rolling history summaries to 24 hours, 7 days, 30 days and 90 days; raw SQLite history remains available for export.
-- Added optional Shizuku UserService sampling while the foreground recorder is active, after the user has granted Shizuku permission; periodic privileged snapshots are retained with the sample data.
-- Added an explicit partial wake lock while user-requested continuous recording is active to reduce CPU-suspend gaps. This increases BatteryScope's own power consumption and is recorded in the event log.
