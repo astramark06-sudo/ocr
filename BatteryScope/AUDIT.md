@@ -1,4 +1,4 @@
-# BatteryScope 1.13 — Measurement and implementation audit
+# BatteryScope 1.14 — Measurement and implementation audit
 
 Audit date: 2026-11-23  
 Branch: `batteryscope`  
@@ -20,6 +20,9 @@ BatteryScope is a standalone Android application. It uses standard Android frame
 | Charge counter | `BATTERY_PROPERTY_CHARGE_COUNTER` | Estimated remaining charge, µAh |
 | Energy counter | `BATTERY_PROPERTY_ENERGY_COUNTER` | Energy counter, nWh |
 | Framework health | `EXTRA_HEALTH` | Android status enum, not capacity health |
+| Charger maximum current/voltage | `max_charging_current` / `max_charging_voltage` broadcast extras | Advertised maximum values when reported; not live measured USB current/voltage |
+| Battery presence | `present` broadcast extra | Only reported when the extra exists |
+| Cycle count | optional `cycle_count` extra | Best-effort metadata; not guaranteed on Android 12/OEM builds |
 
 Battery-side current is not USB input current. Voltage × current is a battery-side power estimate, not adapter output power. Android's unavailable sentinels and permission failures are retained as unavailable; they are not converted to zero.
 
@@ -51,9 +54,9 @@ PDO records describe advertised capabilities, not proof of an active contract. O
 
 ## Recorder and storage limitations
 
-The foreground recorder samples Android battery telemetry every 30 seconds and bounded class-tree inventory every 120 seconds. It uses a partial CPU wake lock while active, increasing the app's own power use. Recording is best-effort and may be interrupted by force-stop, powered-off time, Android/Realme restrictions or service failure. Boot resume is attempted only when the user previously left recording enabled.
+The foreground recorder samples Android battery telemetry every 30 seconds and bounded class-tree inventory every 120 seconds. Live dashboard sysfs traversal and BatteryManager reads execute on a dedicated worker thread rather than the UI thread. The dashboard reports Android property sentinels, Usage Access status, kernel class-root visibility, per-file read/list errors, and root paths that may be absent or SELinux-hidden. It uses a partial CPU wake lock while active, increasing the app's own power use. Recording is best-effort and may be interrupted by force-stop, powered-off time, Android/Realme restrictions or service failure. Boot resume is attempted only when the user previously left recording enabled.
 
-SQLite history is local and has no automatic retention cap. CSV export merges samples and events chronologically and includes wall-clock, monotonic and boot-count fields.
+SQLite history is local and has no automatic retention cap. CSV export merges samples and events chronologically and includes wall-clock, monotonic and boot-count fields plus charger maximum-current/voltage extras, battery presence and optional cycle count. History analytics report SOC percentage/hour, charge-counter-derived mA, screen-on/off charging and discharging rates, plugged-in decline, foreground-app correlation, session durations and approximate historical time-to-full/time-to-empty.
 
 ## Verification boundary
 
