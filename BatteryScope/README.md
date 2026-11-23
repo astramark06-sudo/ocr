@@ -1,4 +1,4 @@
-# BatteryScope 1.9 — Realme Narzo 20 Pro (RMX2161)
+# BatteryScope 1.11 — Realme Narzo 20 Pro (RMX2161)
 
 ## 1.9 measurement diagnosis
 
@@ -87,3 +87,16 @@ The recorder samples the Android battery APIs every 30 seconds and refreshes bou
 For best-effort screen-off sampling, the recorder holds a partial CPU wake lock while active. This prevents normal CPU suspend from deferring the sampling handler, but it increases BatteryScope's own battery consumption. The ongoing notification discloses this. Stop the recorder to release the wake lock.
 
 The history view includes 24-hour, 7-day, 30-day and 90-day summaries; charge/discharge session rates; screen-on/off rates; charge-counter deltas where supported; most recent session time to 50/80/90/100% or 80/50/20/10/0%; and per-app foreground-time correlation with coincident battery-level loss. Threshold times are sample-resolution observations or estimates, not exact hardware event times. App drain remains correlation, not direct per-app current measurement.
+
+
+## 1.11 continuous telemetry recorder
+
+The recorder is user-started and foreground-notification-backed. It samples core BatteryManager telemetry every 30 seconds on a dedicated worker thread, independent of the Activity, and stores raw samples/events in local SQLite. It refreshes class-tree telemetry every 120 seconds and, when Shizuku is running and authorized, stores privileged snapshots every 120 seconds plus a full read-only Android framework/BatteryStats audit every 15 minutes.
+
+History reports 24-hour, 7-day, 30-day and 90-day summaries; recent charge/discharge session timing; charge-counter deltas where the fuel gauge exports them; screen-on/off charge/discharge rates; foreground-app time and coincident battery-level changes; and sampling gaps. Threshold times are sample-resolution observations or rate-based estimates. App-level drain is correlated with foreground time and is not a direct per-app current measurement.
+
+For screen-off sampling, the recorder holds a partial CPU wake lock while active. This improves sampling continuity but increases the app's own power consumption and can prevent deep CPU sleep. The ongoing notification states this. Stop recording to release the lock.
+
+When the user leaves recording enabled, BatteryScope attempts to resume after Android's boot-completed broadcast. The phone cannot be monitored while powered off, before user data is unlocked, or when Android/Realme restrictions prevent a restart. Force-stop, service termination, revoked permissions and Shizuku shutdown can still create gaps. The history view reports gap duration but cannot always infer its cause.
+
+Grant Usage Access for foreground app tracking. Grant Shizuku permission and keep Shizuku running for privileged kernel and dumpsys history. Ordinary app telemetry continues when Shizuku is unavailable.
