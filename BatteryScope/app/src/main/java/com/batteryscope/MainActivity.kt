@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private var exportInFlight = false
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+    private lateinit var samplingModeButton: Button
     private var cachedSupplyNodes: Map<String, String> = emptyMap()
     private var cachedSupplyRootVisible = false
     private var supplyScanCompletedAtMs = 0L
@@ -208,6 +209,11 @@ class MainActivity : Activity() {
             setOnClickListener { openBatteryOptimisationSettings() }
         }
         content.addView(batterySettingsButton, LinearLayout.LayoutParams(-1, -2))
+        samplingModeButton = Button(this).apply {
+            setOnClickListener { toggleSamplingMode() }
+        }
+        content.addView(samplingModeButton, LinearLayout.LayoutParams(-1, -2))
+        updateSamplingModeButton()
 
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -593,7 +599,7 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             startButton.isEnabled = false
             stopButton.isEnabled = true
-            statusText.text = "Starting persistent recorder. It samples every 30 seconds and saves history locally."
+            statusText.text = "Starting persistent recorder. Target: 30-second samples; screen-off continuity depends on the selected CPU wake-lock mode."
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), NOTIFICATION_REQUEST_CODE)
             }
@@ -620,7 +626,40 @@ class MainActivity : Activity() {
             .getBoolean(BatteryRecorderService.KEY_ACTIVE, false)
         startButton.isEnabled = !active
         stopButton.isEnabled = active
-        if (active) statusText.text = "All-day recorder active • 30-second samples • local history database"
+        updateSamplingModeButton()
+        if (active) statusText.text = "All-day recorder active • 30-second target samples • local history database"
+    }
+
+    private fun toggleSamplingMode() {
+        val prefs = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
+        val keepAwake = prefs.getBoolean(BatteryRecorderService.KEY_KEEP_CPU_AWAKE, true)
+        val next = !keepAwake
+        prefs.edit().putBoolean(BatteryRecorderService.KEY_KEEP_CPU_AWAKE, next).apply()
+        val active = prefs.getBoolean(BatteryRecorderService.KEY_ACTIVE, false)
+        if (active) {
+            try {
+                startService(Intent(this, BatteryRecorderService::class.java).setAction(BatteryRecorderService.ACTION_RECONFIGURE))
+            } catch (t: Throwable) {
+                statusText.text = "Sampling mode saved, but recorder reconfiguration failed: ${t.javaClass.simpleName}: ${t.message ?: "unknown"}"
+            }
+        }
+        updateSamplingModeButton()
+        statusText.text = if (next) {
+            "Continuous screen-off sampling enabled. CPU wake lock improves sample continuity but increases BatteryScope's own battery use."
+        } else {
+            "Low-impact sampling enabled. No permanent CPU wake lock; Android may suspend sampling and history will report the resulting gaps."
+        }
+    }
+
+    private fun updateSamplingModeButton() {
+        if (!::samplingModeButton.isInitialized) return
+        val keepAwake = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
+            .getBoolean(BatteryRecorderService.KEY_KEEP_CPU_AWAKE, true)
+        samplingModeButton.text = if (keepAwake) {
+            "Sampling mode: CONTINUOUS (wake lock ON) — tap for low-impact"
+        } else {
+            "Sampling mode: LOW-IMPACT (wake lock OFF) — tap for continuous"
+        }
     }
 
     private fun openUsageAccessSettings() {
@@ -778,7 +817,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        handler.removeCallbacks(sampler)
+        handler.removeCallbacksAndMessages(null)
+        if (::telemetryThread.isInitialized) telemetryThread.quitSafely()
         super.onDestroy()
     }
 
