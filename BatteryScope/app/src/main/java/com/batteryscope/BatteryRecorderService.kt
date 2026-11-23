@@ -649,10 +649,11 @@ class RecorderDatabase(context: Context) :
         val time: Long, val pct: Int?, val state: String, val plug: String,
         val chargeCounter: Long?, val screen: Boolean, val app: String
     )
-    private data class AppMetric(val name: String, val ms: Long, val charge: Double, val drain: Double) {
+    private data class AppMetric(val name: String, val ms: Long, val charge: Double, val drain: Double, val pluggedDrain: Double) {
         val minutes: Long get() = ms / 60_000L
         val chargePct: String get() = String.format(Locale.US, "%.1f", charge)
         val drainPct: String get() = String.format(Locale.US, "%.1f", drain)
+        val pluggedDrainPct: String get() = String.format(Locale.US, "%.1f", pluggedDrain)
     }
     private data class Bucket(var ms: Long = 0L, var pct: Double = 0.0, var chargeCounterUah: Long = 0L)
     private data class Stats(
@@ -663,6 +664,9 @@ class RecorderDatabase(context: Context) :
         val chargeOffHours: String, val chargeOffPct: String, val chargeOffRate: String,
         val drainOnHours: String, val drainOnPct: String, val drainOnRate: String,
         val drainOffHours: String, val drainOffPct: String, val drainOffRate: String,
+        val pluggedDrainHours: String, val pluggedDrainPct: String, val pluggedDrainRate: String,
+        val pluggedDrainOnHours: String, val pluggedDrainOnPct: String, val pluggedDrainOnRate: String,
+        val pluggedDrainOffHours: String, val pluggedDrainOffPct: String, val pluggedDrainOffRate: String,
         val screenOn: Int, val screenOff: Int, val apps: List<AppMetric>
     )
 
@@ -730,9 +734,11 @@ class RecorderDatabase(context: Context) :
         val charge = Bucket(); val drain = Bucket()
         val chargeOn = Bucket(); val chargeOff = Bucket()
         val drainOn = Bucket(); val drainOff = Bucket()
+        val pluggedDrain = Bucket(); val pluggedDrainOn = Bucket(); val pluggedDrainOff = Bucket()
         val appTime = linkedMapOf<String, Long>()
         val appCharge = linkedMapOf<String, Double>()
         val appDrain = linkedMapOf<String, Double>()
+        val appPluggedDrain = linkedMapOf<String, Double>()
         var count = 0
         var screenOn = 0
         var screenOff = 0
@@ -771,11 +777,16 @@ class RecorderDatabase(context: Context) :
                             val delta = (after.pct - before.pct).toDouble()
                             val counterDelta = if (before.chargeCounter != null && after.chargeCounter != null)
                                 after.chargeCounter - before.chargeCounter else 0L
-                            if (charging(before) && charging(after) && delta >= 0.0) {
+                            val bothPlugged = before.plug != "NONE" && after.plug != "NONE"
+                            if (bothPlugged && delta < 0.0) {
+                                add(pluggedDrain, dt, -delta, (-counterDelta).coerceAtLeast(0L))
+                                add(if (after.screen) pluggedDrainOn else pluggedDrainOff, dt, -delta, (-counterDelta).coerceAtLeast(0L))
+                                if (sameApp) appPluggedDrain[after.app] = (appPluggedDrain[after.app] ?: 0.0) - delta
+                            } else if (charging(before) && charging(after) && delta >= 0.0) {
                                 add(charge, dt, delta, counterDelta.coerceAtLeast(0L))
                                 add(if (after.screen) chargeOn else chargeOff, dt, delta, counterDelta.coerceAtLeast(0L))
                                 if (sameApp) appCharge[after.app] = (appCharge[after.app] ?: 0.0) + delta
-                            } else if (discharging(before) && discharging(after) && delta <= 0.0) {
+                            } else if (discharging(before) && discharging(after) && !bothPlugged && delta <= 0.0) {
                                 add(drain, dt, -delta, (-counterDelta).coerceAtLeast(0L))
                                 add(if (after.screen) drainOn else drainOff, dt, -delta, (-counterDelta).coerceAtLeast(0L))
                                 if (sameApp) appDrain[after.app] = (appDrain[after.app] ?: 0.0) - delta
@@ -795,9 +806,12 @@ class RecorderDatabase(context: Context) :
             fmt(charge.chargeCounterUah / 1000.0), fmt(drain.chargeCounterUah / 1000.0),
             duration(chargeOn), fmt(chargeOn.pct), rate(chargeOn), duration(chargeOff), fmt(chargeOff.pct), rate(chargeOff),
             duration(drainOn), fmt(drainOn.pct), rate(drainOn), duration(drainOff), fmt(drainOff.pct), rate(drainOff),
+            duration(pluggedDrain), fmt(pluggedDrain.pct), rate(pluggedDrain),
+            duration(pluggedDrainOn), fmt(pluggedDrainOn.pct), rate(pluggedDrainOn),
+            duration(pluggedDrainOff), fmt(pluggedDrainOff.pct), rate(pluggedDrainOff),
             screenOn, screenOff,
             appTime.entries.sortedByDescending { it.value }.map {
-                AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0)
+                AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0, appPluggedDrain[it.key] ?: 0.0)
             }
         )
     }
