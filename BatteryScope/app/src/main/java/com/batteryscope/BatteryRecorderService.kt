@@ -239,6 +239,14 @@ class BatteryRecorderService : Service() {
             put("battery_status", status)
             put("plug_type", plug)
             if (voltage > 0) put("battery_voltage_mv", voltage)
+            val maxChargingCurrent = intent?.getIntExtra("max_charging_current", -1) ?: -1
+            val maxChargingVoltage = intent?.getIntExtra("max_charging_voltage", -1) ?: -1
+            if (maxChargingCurrent > 0) put("max_charging_current_ua", maxChargingCurrent)
+            if (maxChargingVoltage > 0) put("max_charging_voltage_uv", maxChargingVoltage)
+            val present = intent?.extras?.getBoolean("present")
+            if (present != null) put("battery_present", if (present) 1 else 0)
+            val cycles = intent?.getIntExtra("cycle_count", -1) ?: -1
+            if (cycles >= 0) put("battery_cycle_count", cycles)
             if (temperature in 0..1000) put("temperature_c", temperature / 10.0)
             if (current != null) put("battery_current_ua", current)
             if (average != null) put("battery_average_current_ua", average)
@@ -473,13 +481,14 @@ class BatteryRecorderService : Service() {
 
 /** SQLite keeps raw samples/events until the user deletes app data. */
 class RecorderDatabase(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "batteryscope_history.db", null, 2) {
+    SQLiteOpenHelper(context.applicationContext, "batteryscope_history.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE samples (
             timestamp_ms INTEGER PRIMARY KEY, elapsed_realtime_ms INTEGER NOT NULL, boot_count INTEGER,
             battery_percent INTEGER, battery_status TEXT NOT NULL, plug_type TEXT NOT NULL,
             battery_voltage_mv INTEGER, battery_current_ua INTEGER, battery_average_current_ua INTEGER,
+            max_charging_current_ua INTEGER, max_charging_voltage_uv INTEGER, battery_present INTEGER, battery_cycle_count INTEGER,
             charge_counter_uah INTEGER, energy_counter_nwh INTEGER, temperature_c REAL,
             battery_health TEXT, technology TEXT, screen_on INTEGER NOT NULL,
             foreground_package TEXT, usage_access INTEGER NOT NULL, power_supply_json TEXT,
@@ -497,6 +506,12 @@ class RecorderDatabase(context: Context) :
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE samples ADD COLUMN boot_count INTEGER")
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE samples ADD COLUMN max_charging_current_ua INTEGER")
+            db.execSQL("ALTER TABLE samples ADD COLUMN max_charging_voltage_uv INTEGER")
+            db.execSQL("ALTER TABLE samples ADD COLUMN battery_present INTEGER")
+            db.execSQL("ALTER TABLE samples ADD COLUMN battery_cycle_count INTEGER")
         }
     }
 
@@ -955,7 +970,7 @@ class RecorderDatabase(context: Context) :
     }
 
     fun exportCsv(writer: Writer) {
-        writer.write(RecorderCsv.encodeRow(listOf("record_type","timestamp_ms","elapsed_realtime_ms","battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","boot_count","event_type","details")))
+        writer.write(RecorderCsv.encodeRow(listOf("record_type","timestamp_ms","elapsed_realtime_ms","battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","max_charging_current_ua","max_charging_voltage_uv","battery_present","battery_cycle_count","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","boot_count","event_type","details")))
         val sampleNames = listOf("battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","boot_count")
         readableDatabase.rawQuery("SELECT * FROM samples ORDER BY timestamp_ms", null).use { samples ->
             readableDatabase.rawQuery("SELECT timestamp_ms,event_type,details FROM events ORDER BY timestamp_ms", null).use { events ->
