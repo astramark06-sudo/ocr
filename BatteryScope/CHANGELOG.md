@@ -49,3 +49,9 @@ All versions are debug APK development builds unless a signed release is explici
 - Recorder is user-started and displays an ongoing notification. START_STICKY supports service recreation, but force-stop, power-off, OEM process restrictions and denied permissions can still interrupt recording.
 - App-level drain is not measured electrically; foreground-app intervals are correlation data only.
 - Version code: 11.
+
+
+- Added session analytics: charge/discharge percentage rates, charge-counter change where available, screen-on versus screen-off rates, recent-session threshold times, and foreground-app-correlated discharge.
+- Extended rolling history summaries to 24 hours, 7 days, 30 days and 90 days; raw SQLite history remains available for export.
+- Added optional Shizuku UserService sampling while the foreground recorder is active, after the user has granted Shizuku permission; periodic privileged snapshots are retained with the sample data.
+- Added an explicit partial wake lock while user-requested continuous recording is active to reduce CPU-suspend gaps. This increases BatteryScope's own power consumption and is recorded in the event log.
