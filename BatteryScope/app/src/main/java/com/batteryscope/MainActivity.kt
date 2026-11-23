@@ -433,8 +433,12 @@ class MainActivity : Activity() {
 
     private fun readSnapshot(): Reading {
         val intent = batteryIntent()
-        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
+        val level = intent?.extras?.let {
+            if (it.containsKey(BatteryManager.EXTRA_LEVEL)) it.getInt(BatteryManager.EXTRA_LEVEL, -1) else -1
+        } ?: -1
+        val scale = intent?.extras?.let {
+            if (it.containsKey(BatteryManager.EXTRA_SCALE)) it.getInt(BatteryManager.EXTRA_SCALE, -1) else -1
+        } ?: -1
         val percent = if (level >= 0 && scale > 0) (level * 100 / scale) else null
         val rawVoltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
         val rawTemp = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
