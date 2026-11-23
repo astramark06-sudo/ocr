@@ -378,6 +378,7 @@ class MainActivity : Activity() {
         lines += "Thermal / hwmon attributes discovered: " + thermal.size
         lines += "Android thermal status: " + (nodes["@android_thermal_status"] ?: "not available from PowerManager on this Android build")
         lines += "Raw kernel attributes captured: " + (nodes["@field_count"] ?: nodes.size.toString())
+        if (nodes["@field_limit_reached"] == "true") lines += "WARNING: bounded kernel scan reached its configured field cap of " + (nodes["@field_limit"] ?: "unknown") + "; later paths were not scanned.
         val denied = nodes.filterValues { it == "READ_DENIED" || it == "LIST_DENIED" || it.startsWith("ERROR:") }
         lines += "Permission / read errors: " + denied.size
         denied.entries.take(20).forEach { lines += "  " + it.key + " = " + it.value }
