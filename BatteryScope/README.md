@@ -1,11 +1,11 @@
-# BatteryScope 1.14 — Realme Narzo 20 Pro (RMX2161)
+# BatteryScope 1.15 — Realme Narzo 20 Pro (RMX2161)
 
 BatteryScope is evolving into a local-first Android device telemetry and history system. The current implementation records battery/charging data and selected app-use correlations; the broader device-wide collectors are being designed and implemented in phases. It uses standard Android framework APIs and best-effort read-only access from its ordinary app process. It does not require Shizuku, root, ADB setup or a companion app.
 
 The device-wide capability matrix, lifecycle design and implementation gates are documented in [DEVICE_TELEMETRY_ARCHITECTURE.md](DEVICE_TELEMETRY_ARCHITECTURE.md).
 
 Application ID: `com.batteryscope`  
-Version: 1.14 (versionCode 15)  
+Version: 1.15 (versionCode 16)  
 Target handset: Realme Narzo 20 Pro RMX2161, Android 12, non-rooted  
 Build toolchain: Java 17, Gradle 8.9, Android SDK 35
 
@@ -19,7 +19,7 @@ Important distinctions:
 - Android health GOOD is a framework status, not a measured battery-health percentage. When readable, the app also reports kernel fuel-gauge `charge_full`, `charge_full_design` and `cycle_count` attributes; the charge-full/design ratio is shown separately from BatteryScope's empirical history estimate.
 - Missing, denied or invalid readings remain unavailable; they are never substituted with zero. The diagnostics distinguish Android unavailable sentinels, security exceptions, other property-read errors and missing battery-broadcast extras where the API exposes that distinction.
 
-BatteryScope also attempts bounded, read-only inspection of ordinary-app-visible power-supply, Type-C, USB-PD, USB-role, thermal and hwmon class attributes. Android/Realme permissions may deny individual paths. Any same-supply USB voltage/current pair remains a candidate until its semantics are verified on the handset. The app does not infer charger input watts from battery-side current, decode the proprietary SuperDart wire handshake, negotiate charging protocols or write sysfs controls.
+**Measurement quality guard:** BatteryManager current is accepted for signed battery-side watts only when its direction agrees with Android's documented convention and the battery state. Battery voltage must be a plausible millivolt value. Raw values are retained and flagged when invalid; the app does not flip signs or guess OEM unit multipliers. Charger-input watts remain a separate measurement and are shown unavailable unless a verified USB-side voltage/current pair exists.\n\nBatteryScope also attempts bounded, read-only inspection of ordinary-app-visible power-supply, Type-C, USB-PD, USB-role, thermal and hwmon class attributes. Android/Realme permissions may deny individual paths. Any same-supply USB voltage/current pair remains a candidate until its semantics are verified on the handset. The app does not infer charger input watts from battery-side current, decode the proprietary SuperDart wire handshake, negotiate charging protocols or write sysfs controls.
 
 ## Battery health and capacity estimate
 
