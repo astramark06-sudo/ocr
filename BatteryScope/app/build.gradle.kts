@@ -12,8 +12,8 @@ android {
         applicationId = "com.batteryscope"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.11"
+        versionCode = 13
+        versionName = "1.12"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -27,4 +27,5 @@ android {
 dependencies {
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
+    testImplementation("junit:junit:4.13.2")
 }
