@@ -24,9 +24,9 @@ Package: `com.batteryscope`
 - Android battery percentage, status, plugged source, voltage, temperature, health enum, technology.
 - BatteryManager instantaneous and average battery-side current, charge counter and energy counter.
 - Optional kernel fuel-gauge charge_full/design-capacity ratio and cycle_count when readable, kept separate from empirical capacity estimate.
-- Charger-advertised maximum current/voltage, battery-present state and optional cycle-count metadata when Android/OEM extras expose them.
+- Charger-advertised maximum current/voltage, battery-present state, invalid-charger flag and optional cycle-count metadata when Android/OEM extras expose them.
 - Battery-side power estimate only when voltage/current are plausible; never label this as USB input power.
-- Best-effort charger-advertised maximum current/voltage, battery-present and optional cycle-count extras.
+- Best-effort charger-advertised maximum current/voltage, battery-present, invalid-charger and optional cycle-count extras.
 - Read-only inventory of power_supply, Type-C, USB-PD, USB role, thermal, hwmon and selected non-serial USB descriptor attributes.
 - Vendor/Oplus/VOOC fields are raw state indicators only; no proprietary handshake or protocol claims.
 - Per-root and per-file visibility/read/list diagnostics; distinguishes definitely unavailable from permission denied and absent-or-SELinux-hidden.
@@ -47,7 +47,7 @@ Package: `com.batteryscope`
 - Recent charge/discharge session durations, SOC thresholds and historical time-to-full/time-to-empty estimates.
 - App foreground time with coincident SOC movement. This is correlation, not per-app electrical energy/current.
 - CSV export includes chronological samples/events, boot metadata and raw hardware tree snapshots.
-- SQLite schema v4 adds charger maximum current/voltage, battery-present and optional cycle count without deleting v1/v2 history.
+- SQLite schema v4 adds charger maximum current/voltage, battery-present, invalid-charger and optional cycle count without deleting v1/v2/v3 history.
 
 ### Capacity estimate
 - Estimates full-charge capacity from charge-counter movement versus SOC movement across continuous sessions.
@@ -72,7 +72,7 @@ Package: `com.batteryscope`
 1. Build and test version 1.14 on GitHub Actions; repair all compiler/test failures before APK delivery.
 2. Check that the CSV header, sample field list and event row have exactly aligned columns after schema v4.
 2. Audit MainActivity and recorder for any remaining main-thread I/O, races, lifecycle crashes or unbounded work.
-3. Review schema-v3 migration from v1 and v2 databases, CSV header/row alignment, and large-history performance.
+3. Review schema-v4 migrations from v1, v2 and v3 databases, CSV header/row alignment, and large-history performance.
 4. Add focused JVM tests for rate math, session splitting, charging-while-plugged decline, screen-state projections, and migration/CSV invariants where testable.
 5. Improve diagnostic report so every unavailable measurement has the best possible specific reason and next action.
 6. Inspect the RMX2161's actual exposed attributes after user installs and shares BatteryScope's diagnostic export; use that evidence to validate USB input V/I semantics, VOOC state, thermal zones and charge-counter availability.
