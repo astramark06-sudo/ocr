@@ -891,7 +891,7 @@ class RecorderDatabase(context: Context) :
                 current += row
             } else if (firstFull) {
                 if (current.isNotEmpty()) {
-                    val gap = row.time - current.last().time
+                    val gap = sampleIntervalMs(current.last(), row)
                     if (gap in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3)) current += row
                     sessions += current
                     current = mutableListOf()
