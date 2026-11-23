@@ -84,3 +84,10 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - SQLite schema is now v4; v3-to-v4 migration adds `invalid_charger_state` without deleting existing history. v1/v2 migrations remain sequential.
 - CSV includes invalid-charger status. Header, sample row and event row widths were rechecked: 28 columns each (23 sample-specific columns plus the 3 leading and 2 trailing record/event fields).
 - Full Android Gradle build and physical RMX2161 validation remain pending; no APK is claimed as verified.
+
+## Schema v4 validation result
+
+- SQLite migration simulations from schema v1, v2 and v3 to v4 passed; an existing sample row was preserved and newly added columns remained null as expected.
+- CSV header, sample row and event row widths align at 28 fields after adding `invalid_charger_state`.
+- Android invalid-charger flag is now included in the live panel, diagnostics, SQLite and CSV.
+- Pure Kotlin rate/capacity arithmetic checks passed earlier; full Android build, GitHub Actions result and physical handset validation remain pending.
