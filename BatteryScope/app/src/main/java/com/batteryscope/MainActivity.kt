@@ -376,6 +376,8 @@ class MainActivity : Activity() {
         if (usb.isEmpty()) lines += "USB-C interface diagnosis: class absent, hidden by access controls, or not enumerable by ordinary app UID."
         val thermal = nodes.filterKeys { it.startsWith("thermal/") || it.startsWith("hwmon/") }
         lines += "Thermal / hwmon attributes discovered: " + thermal.size
+        lines += "Android thermal status: " + (nodes["@android_thermal_status"] ?: "not available from PowerManager on this Android build")
+        lines += "Raw kernel attributes captured: " + (nodes["@field_count"] ?: nodes.size.toString())
         val denied = nodes.filterValues { it == "READ_DENIED" || it == "LIST_DENIED" || it.startsWith("ERROR:") }
         lines += "Permission / read errors: " + denied.size
         denied.entries.take(20).forEach { lines += "  " + it.key + " = " + it.value }
@@ -467,7 +469,11 @@ class MainActivity : Activity() {
             appendLine("Energy counter         ${reading.energyNwh?.let { "$it nWh / ${String.format(Locale.US, "%.3f Wh", it / 1_000_000_000.0)}" } ?: "Unavailable"}")
             appendLine("Temperature            ${format(reading.temperatureC, "°C")}")
             appendLine("Android battery health ${reading.health} (framework status; not capacity health)")
-            append("Technology             ${reading.technology}")
+            appendLine("Technology             ${reading.technology}")
+            appendLine("Battery present        ${reading.batteryPresent?.toString() ?: "NOT REPORTED"}")
+            appendLine("Charge cycle count     ${reading.cycleCount?.toString() ?: "NOT EXPOSED"}")
+            appendLine("Max charging current   ${reading.maxChargingCurrentUa?.let { String.format(Locale.US, "%.0f mA (%d µA)", it / 1000.0, it) } ?: "NOT REPORTED"}")
+            append("Max charging voltage   ${reading.maxChargingVoltageUv?.let { String.format(Locale.US, "%.3f V (%d µV)", it / 1_000_000.0, it) } ?: "NOT REPORTED"}")
         }
 
         val external = reading.supplies.filterKeys { key ->
