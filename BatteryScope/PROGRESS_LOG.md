@@ -13,7 +13,7 @@ Committed source changes:
 - Moved live dashboard BatteryManager and kernel-tree reads onto a dedicated HandlerThread so directory traversal no longer blocks the UI thread.
 - Reduced dashboard refresh polling to 2 seconds while keeping recorder collection separate.
 - Added optional Android broadcast metadata: charger maximum charging current/voltage, battery-present and cycle-count extra.
-- Added SQLite schema version 3 and non-destructive v2-to-v3 migration for these four fields; v1-to-v2 boot-count migration remains.
+- Added SQLite schema version 4 and non-destructive v2-to-v3 migration for these four fields; v1-to-v2 boot-count migration remains.
 - Added the new fields to CSV export.
 - Expanded diagnostics for BatteryManager unavailable sentinels, Usage Access, individual kernel class-root status, read/list errors, thermal status and captured field count.
 - Avoids claiming a root path is definitely absent when it may be hidden by SELinux.
@@ -66,7 +66,7 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 ## Final checkpoint — source audit and remaining verification
 
 - Confirmed no Shizuku, Shizuku provider/AIDL, privileged service, or Oplus `cool_down` control references remain in the app's MainActivity, recorder service, manifest or Gradle dependencies; deleted Shizuku service/AIDL paths return not found.
-- Confirmed SQLite schema v3 migration and CSV field alignment: 27 header fields, 22 sample-specific columns plus record type/timestamp/elapsed and event columns; sample and event row widths both align to 27.
+- Confirmed SQLite schema v4 migration and CSV field alignment: 27 header fields, 22 sample-specific columns plus record type/timestamp/elapsed and event columns; sample and event row widths both align to 27.
 - Corrected history charge-counter reporting so missing or direction-inconsistent counter values remain `n/a`, not false 0 mAh or 0 mA.
 - Local isolated Kotlin checks passed for capacity estimation (3 scenarios) and rate/forecast arithmetic (4 checks). These are not a substitute for the full Android Gradle build.
 - Android Gradle build, repository JVM suite, APK artifact/signature and RMX2161 runtime validation remain unverified. Do not install over an existing signed build or uninstall an older app without protecting its local database.
