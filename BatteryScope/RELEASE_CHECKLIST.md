@@ -27,7 +27,11 @@ A source commit is not a release. Keep build verification, artifact integrity, i
 
 ## Physical RMX2161 validation — required before claiming device-tested
 - [ ] Install/launch and verify update compatibility.
-- [ ] Verify battery current/voltage/temperature/charge counter against system sources where available.\n- [ ] Confirm current polarity agrees with Android BatteryManager semantics during both charging and unplugged discharge; invalid values must be flagged and excluded from wattage.\n- [ ] Confirm raw voltage is a valid mV reading before battery-side wattage is displayed.\n- [ ] Confirm quality-transition events are present in CSV and foreground UsageStats events preserve source timestamps.\n- [ ] Compare the new APK signing certificate digest with the installed app before any in-place update.
+- [ ] Verify battery current/voltage/temperature/charge counter against system sources where available.
+- [ ] Confirm current polarity agrees with Android BatteryManager semantics during both charging and unplugged discharge; invalid values must be flagged and excluded from wattage.
+- [ ] Confirm raw voltage is a valid mV reading before battery-side wattage is displayed.
+- [ ] Confirm quality-transition events are present in CSV and foreground UsageStats events preserve source timestamps.
+- [ ] Compare the new APK signing certificate digest with the installed app before any in-place update.
 - [ ] Verify ordinary-app telemetry while unplugged and charging; unavailable paths remain explicitly unavailable.
 - [ ] Confirm USB source identity and validate any VBUS/IBUS paths and units.
 - [ ] Test recorder screen-off, multi-hour logging, notification, wake-lock power impact and gap diagnostics.
