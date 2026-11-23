@@ -45,3 +45,14 @@ Next:
 
 
 Checkpoint marker: workflow-triggering commit created after 1.14 source milestone.
+
+## Additional 1.14 implementation checkpoint
+
+- Dashboard telemetry and kernel sysfs enumeration were moved to a dedicated HandlerThread; the UI no longer performs the bounded kernel directory scan.
+- Added optional charger maximum current/voltage, battery-present and cycle-count extras to live readings and recorder samples.
+- Added four schema-v3 columns with non-destructive migration from existing schema v2.
+- Corrected CSV sample/header fields to include those four values.
+- History now shows battery-side mA rate from charge-counter deltas and historical time-to-full/time-to-empty forecasts split by screen-on/off charging/discharging averages.
+- Added pure `BatteryRateMath` and unit tests for rate and forecast arithmetic.
+- Improved kernel access diagnostics and explicit hardware scan-cap reporting.
+- GitHub Actions build and device runtime verification remain pending.
