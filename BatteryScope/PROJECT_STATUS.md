@@ -13,14 +13,14 @@ BatteryScope is a standalone Android application. It uses standard Android APIs 
 
 ## Source layout
 
-- `app/src/main/java/com/batteryscope/MainActivity.kt` — UI, Android telemetry, ordinary-app read-only diagnosis, recorder controls, capacity panel and CSV picker.
+- `app/src/main/java/com/batteryscope/MainActivity.kt` — UI, Android telemetry, ordinary-app read-only diagnosis, automatic recorder recovery, capacity panel and CSV picker.
 - `app/src/main/java/com/batteryscope/BatteryRecorderService.kt` — foreground recorder, worker thread, event capture, ordinary-app sysfs inventory, SQLite schema/history analytics and CSV writer.
 - `app/src/main/java/com/batteryscope/BatteryCapacityEstimator.kt` — pure estimator using charge-counter/SOC session deltas.
 - `app/src/main/java/com/batteryscope/BatteryRateMath.kt` — tested mA rate and SOC forecast calculations.
 - `app/src/main/java/com/batteryscope/BatteryPercentMath.kt` — validated battery level/scale conversion.
 - `app/src/test/java/com/batteryscope/BatteryRateMathTest.kt` — pure calculation tests.
 - `app/src/test/java/com/batteryscope/BatteryPercentMathTest.kt` — missing/invalid percentage metadata tests.
-- `app/src/main/java/com/batteryscope/BatteryRecorderBootReceiver.kt` — user-intent-based BOOT_COMPLETED resume attempt.
+- `app/src/main/java/com/batteryscope/BatteryRecorderBootReceiver.kt` — automatic BOOT_COMPLETED and MY_PACKAGE_REPLACED resume attempt.
 - `app/src/main/AndroidManifest.xml` — Android permissions, launcher, boot receiver and foreground-service declaration.
 - `app/src/test/java/com/batteryscope/BatteryCapacityEstimatorTest.kt` — capacity-estimator unit tests.
 - `app/build.gradle.kts` — application identity, version and Android dependencies.
@@ -67,3 +67,19 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 5. Verify recorder notification, screen-off sampling, wake-lock power impact, CSV export and app-private history.
 6. Test boot-resume behavior and Realme background-management restrictions.
 7. Confirm no Shizuku, root, ADB or companion-app setup is requested or required.
+
+
+## Device-wide monitoring expansion — in progress (2026-11-23)
+
+The product objective has expanded from battery-only monitoring to a permanent, local-first device telemetry platform. The full capability matrix, Android API/permission classification, history-import plan, RMX2161 device census, lifecycle design and phased acceptance gates are in [DEVICE_TELEMETRY_ARCHITECTURE.md](DEVICE_TELEMETRY_ARCHITECTURE.md).
+
+Source changes now request recorder startup automatically when the app resumes, resume on BOOT_COMPLETED and MY_PACKAGE_REPLACED, and remove the in-app Start/Stop controls and service stop action. The boot receiver no longer gates restart on the former user-enabled preference. The ongoing foreground notification remains. This lifecycle source change is not yet build-verified or tested on the RMX2161.
+
+Newly identified Android data sources for later implementation:
+- UsageStatsManager events and daily/weekly/monthly/yearly aggregates (requires user-granted Usage Access; detailed events expire after a few days).
+- NetworkStatsManager mobile/Wi-Fi and per-UID byte buckets (requires access and device verification).
+- StorageStatsManager per-package storage usage (queries can take seconds and must run off-main-thread).
+- PowerManager thermal status/headroom, ActivityManager memory information, SensorManager sensor inventory, and best-effort CPU/GPU/thermal sysfs sources.
+- BatteryStats per-UID energy and full system battery history remain privileged; no ordinary-app workaround is assumed.
+
+The RMX2161's exact kernel exports, UsageStats/NetworkStats query behavior, SuperDart input telemetry, sensor inventory and Realme background policy remain unverified until an on-device capability report is collected. No new device-wide collector is marked implemented merely because its API has been identified.
