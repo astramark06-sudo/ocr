@@ -134,3 +134,11 @@ Checkpoint marker: workflow-triggering commit created after 1.14 source mileston
 - The dashboard separately reports whether ACTION_BATTERY_CHANGED was available and whether battery level, voltage and temperature extras were missing or invalid.
 - The recorder persists BatteryManager property-access status transitions as events (AVAILABLE, unavailable sentinel, security exception or exception class). It logs transitions only, not every 30-second sample, to avoid event spam.
 - No schema change. Exact hardware-path visibility still depends on the Realme ROM and ordinary-app SELinux permissions.
+
+
+## 2026-11-23 — Battery percentage input validation
+
+- Removed the implicit 100-point default when Android does not provide EXTRA_SCALE. Both the live dashboard and recorder now require a valid EXTRA_LEVEL/EXTRA_SCALE pair.
+- Added a shared pure `BatteryPercentMath` helper that rejects missing scale, non-positive scale, negative level and level greater than scale instead of inventing a percentage.
+- Added JVM tests for normal, full, empty, missing and out-of-range values.
+- No schema change; invalid/missing percentage remains null in SQLite and CSV.
