@@ -1,5 +1,15 @@
 # BatteryScope changelog
 
+## 1.13 — standalone battery capacity estimation
+- Added a Battery Health panel estimating full-charge capacity from Android charge-counter movement relative to state-of-charge changes across continuous sessions.
+- Uses up to 90 days of history, a 12-percentage-point minimum session change, same-boot continuity, direction checks, median aggregation, session spread and qualitative confidence.
+- Uses 4,500 mAh as the RMX2161 design-capacity baseline; reports unavailable rather than fabricating capacity when the charge counter is missing or no valid sessions exist.
+- Removed Shizuku dependencies, provider, UserService/AIDL integration and setup requirements. BatteryScope now uses standard Android APIs and ordinary-app access only.
+- Removed privileged Oplus charging-control writes; no sysfs write path remains.
+- Added estimator unit tests for nominal capacity and invalid data rejection.
+- Version code: 14.
+
+
 ## 1.12 — CSV export integrity and session timing correction
 - Fixed CSV record terminators: exported headers, samples and events now end with actual newline characters rather than literal backslash-n text.
 - Centralized CSV row quoting/escaping and added JVM unit tests for commas, quotes, embedded line breaks and empty columns.
