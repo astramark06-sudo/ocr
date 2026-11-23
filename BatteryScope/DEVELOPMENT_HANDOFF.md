@@ -32,6 +32,9 @@ Package: `com.batteryscope`
 - Per-root and per-file visibility/read/list diagnostics; distinguishes definitely unavailable from permission denied and absent-or-SELinux-hidden.
 - Usage Access status is displayed for foreground-app correlation.
 - Live dashboard file traversal and BatteryManager reads run on a dedicated HandlerThread.
+- Recorder event writes triggered by service/broadcast callbacks are queued on the recorder HandlerThread; database close is queued after pending work to avoid main-thread SQLite stalls and dropped events.
+- BOOT_COMPLETED no longer opens SQLite on the broadcast main thread; automatic-resume failures are saved in preferences and surfaced in diagnostics.
+- Duplicate MainActivity lifecycle override found during review was removed.
 
 ### Recording and analytics
 - User-started foreground service; 30-second BatteryManager sample target; 120-second kernel-tree inventory.
@@ -69,15 +72,15 @@ Package: `com.batteryscope`
 
 ## Next engineering priorities
 
-1. Build and test version 1.14 on GitHub Actions; repair all compiler/test failures before APK delivery.
-2. Check that the CSV header, sample field list and event row have exactly aligned columns after schema v4.
-2. Audit MainActivity and recorder for any remaining main-thread I/O, races, lifecycle crashes or unbounded work.
-3. Review schema-v4 migrations from v1, v2 and v3 databases, CSV header/row alignment, and large-history performance.
-4. Add focused JVM tests for rate math, session splitting, charging-while-plugged decline, screen-state projections, and migration/CSV invariants where testable.
-5. Improve diagnostic report so every unavailable measurement has the best possible specific reason and next action.
-6. Inspect the RMX2161's actual exposed attributes after user installs and shares BatteryScope's diagnostic export; use that evidence to validate USB input V/I semantics, VOOC state, thermal zones and charge-counter availability.
-7. Preserve signing-key continuity before releasing an APK that should update an installed version. CI-generated ephemeral debug keys may not match older APK signatures; do not advise uninstalling without exporting/preserving local history.
-8. Only mark hardware validation complete after real handset evidence exists.
+1. Verify the dedicated Android GitHub Actions workflow on the latest batteryscope commit; repair every compile/test failure before APK delivery.
+2. Inspect the exact workflow artifact, APK metadata, checksum and signing identity; do not assume update compatibility with older debug builds.
+3. Continue auditing MainActivity and recorder for lifecycle races, main-thread I/O, long-running history queries and large-database performance.
+4. Recheck schema-v4 migrations from v1/v2/v3 and verify all CSV header/sample/event rows align at 28 fields.
+5. Add focused JVM tests for plugged-in drain, screen-state projections, usage correlation boundaries and database/export invariants where feasible.
+6. Improve diagnostics where exact unavailable reasons can be distinguished from absent-or-SELinux-hidden paths.
+7. Inspect the RMX2161's actual exposed attributes after installation; validate USB input V/I semantics, VOOC state, thermal zones and charge-counter availability from a diagnostic export.
+8. Preserve signing-key continuity before releasing an APK intended to update an installed version. Do not advise uninstalling without protecting local history.
+9. Only mark hardware validation complete after real handset evidence exists.
 
 ## Resume instructions for a future ChatGPT session
 
