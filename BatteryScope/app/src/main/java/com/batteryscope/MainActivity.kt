@@ -60,6 +60,7 @@ class MainActivity : Activity() {
 
     private data class Reading(
         val percent: Int?,
+        val batteryPercentStatus: String,
         val rawVoltageMv: Int?,
         val currentUa: Long?,
         val currentPropertyStatus: String,
@@ -440,6 +441,15 @@ class MainActivity : Activity() {
             if (it.containsKey(BatteryManager.EXTRA_SCALE)) it.getInt(BatteryManager.EXTRA_SCALE, -1) else -1
         } ?: -1
         val percent = BatteryPercentMath.percent(level, scale)
+        val percentStatus = when {
+            intent == null -> "ACTION_BATTERY_CHANGED_UNAVAILABLE"
+            !intent.hasExtra(BatteryManager.EXTRA_LEVEL) -> "EXTRA_LEVEL_MISSING"
+            !intent.hasExtra(BatteryManager.EXTRA_SCALE) -> "EXTRA_SCALE_MISSING"
+            level < 0 -> "EXTRA_LEVEL_INVALID"
+            scale <= 0 -> "EXTRA_SCALE_NON_POSITIVE"
+            level > scale -> "EXTRA_LEVEL_EXCEEDS_SCALE"
+            else -> "AVAILABLE"
+        }
         val rawVoltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
         val rawTemp = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
         val temp = if (rawTemp in 0..1000) rawTemp / 10.0 else null
@@ -476,6 +486,7 @@ class MainActivity : Activity() {
         val (supplies, readable) = readSupplyNodes()
         return Reading(
             percent = percent,
+            batteryPercentStatus = percentStatus,
             rawVoltageMv = rawVoltage.takeIf { it > 0 },
             currentUa = currentRead.value,
             currentPropertyStatus = currentRead.status,
@@ -575,7 +586,7 @@ class MainActivity : Activity() {
             appendLine("Kernel external online flags: ${onlineNodes.joinToString().ifBlank { "not observed by app UID" }}")
             appendLine("Ordinary app sysfs: ${if (reading.supplyRootReadable) "directory visible; individual files may still be denied" else "not visible"}")
             appendLine("ACTION_BATTERY_CHANGED: " + if (reading.batteryBroadcastAvailable) "available" else "NOT AVAILABLE from Android sticky broadcast")
-            appendLine("Battery percentage: " + (reading.percent?.let { "available (${it}%)" } ?: "unavailable — EXTRA_LEVEL/EXTRA_SCALE missing or invalid"))
+            appendLine("Battery percentage: " + (reading.percent?.let { "available (${it}%)" } ?: "unavailable — " + reading.batteryPercentStatus))
             appendLine("Battery voltage: " + (reading.rawVoltageMv?.let { "available (${it} mV)" } ?: "unavailable — EXTRA_VOLTAGE missing or invalid"))
             appendLine("Battery temperature: " + (reading.temperatureC?.let { "available (${it} °C)" } ?: "unavailable — EXTRA_TEMPERATURE missing or outside accepted range"))
             appendLine("Android charge counter: ${reading.chargeCounterUah?.let { "available (${it} µAh)" } ?: "unavailable — " + reading.chargeCounterPropertyStatus}")
