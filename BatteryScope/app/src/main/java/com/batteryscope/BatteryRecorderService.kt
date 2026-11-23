@@ -321,11 +321,17 @@ class BatteryRecorderService : Service() {
         val keys = json.keys()
         while (keys.hasNext()) {
             val key = keys.next()
-            val supply = key.substringBefore('/')
-            if (supply.lowercase(Locale.US) in setOf("battery", "bms", "main") || !key.endsWith("/voltage_now")) continue
+            if (!key.endsWith("/voltage_now")) continue
+            val supplyPath = key.substringBeforeLast('/')
+            val supplyName = supplyPath.substringAfterLast('/')
+            if (supplyName.lowercase(Locale.US) in setOf("battery", "bms", "main")) continue
             val voltage = json.optString(key).toLongOrNull() ?: continue
-            val current = json.optString(supply + "/current_now").toLongOrNull() ?: continue
-            if (voltage in 1_000_000L..30_000_000L && abs(current) <= 20_000_000L) return voltage to current
+            val current = json.optString(supplyPath + "/current_now").toLongOrNull() ?: continue
+            val type = json.optString(supplyPath + "/type").uppercase(Locale.US)
+            val looksUsb = supplyName.contains("usb", true) || type.contains("USB")
+            if (looksUsb && voltage in 1_000_000L..30_000_000L && abs(current) <= 20_000_000L) {
+                return voltage to current
+            }
         }
         return null
     }
@@ -420,11 +426,10 @@ class RecorderDatabase(context: Context) :
             "24 HOURS" to 24L * 60 * 60 * 1000,
             "7 DAYS" to 7L * 24 * 60 * 60 * 1000,
             "30 DAYS" to 30L * 24 * 60 * 60 * 1000,
-            "90 DAYS" to 90L * 24 * 60 * 60 * 1000,
-            "365 DAYS" to 365L * 24 * 60 * 60 * 1000,
-            "ALL TIME" to Long.MAX_VALUE
+            "90 DAYS" to 90L * 24 * 60 * 60 * 1000
         )
-        val allRows = readWindow(0L)
+        // Session detail uses a bounded recent window; raw history/export retains all records.
+        val allRows = readWindow(now - 90L * 24 * 60 * 60 * 1000)
         return buildString {
             val total = readableDatabase.rawQuery("SELECT COUNT(*) FROM samples", null).use {
                 if (it.moveToFirst()) it.getLong(0) else 0L
@@ -433,7 +438,7 @@ class RecorderDatabase(context: Context) :
             appendLine("Stored samples: " + total + " • target sample interval: 30 seconds")
             appendLine("App attribution is correlated/estimated from foreground time and coincident battery change; it is not a direct per-app electrical measurement.")
             for ((label, duration) in windows) {
-                val rows = if (duration == Long.MAX_VALUE) allRows else readWindow(now - duration)
+                val rows = if (duration == 90L * 24 * 60 * 60 * 1000) allRows else readWindow(now - duration)
                 val s = summarise(rows)
                 appendLine()
                 appendLine("=== " + label + " • " + s.count + " samples ===")
@@ -506,8 +511,9 @@ class RecorderDatabase(context: Context) :
         return rows
     }
 
-    private fun charging(row: Row) = row.state == "CHARGING" && row.plug != "NONE"
-    private fun discharging(row: Row) = row.state == "DISCHARGING" && row.plug == "NONE"
+    // BatteryManager status is primary; plug state can lag a connection transition.
+    private fun charging(row: Row) = row.state == "CHARGING"
+    private fun discharging(row: Row) = row.state == "DISCHARGING"
 
     private fun add(bucket: Bucket, duration: Long, pct: Double, counter: Long) {
         bucket.ms += duration
