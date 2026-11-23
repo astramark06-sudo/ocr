@@ -965,7 +965,7 @@ class RecorderDatabase(context: Context) :
         val rate = if (directionMatches) kotlin.math.abs(change.toDouble()) / (elapsed / 3_600_000.0) else 0.0
         val counterDelta = if (first.chargeCounter != null && last.chargeCounter != null) last.chargeCounter - first.chargeCounter else null
         val onMs = run.zipWithNext().sumOf { (a, b) ->
-            val dt = b.time - a.time
+            val dt = sampleIntervalMs(a, b)
             if (dt in 1_000L..(BatteryRecorderService.SAMPLE_INTERVAL_MS * 3) && b.screen) dt else 0L
         }
         val offMs = elapsed - onMs
@@ -1019,7 +1019,7 @@ class RecorderDatabase(context: Context) :
     }
 
     fun exportCsv(writer: Writer) {
-        writer.write("record_type,timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,battery_voltage_mv,battery_current_ua,battery_average_current_ua,charge_counter_uah,energy_counter_nwh,temperature_c,battery_health,technology,screen_on,foreground_package,usage_access,power_supply_json,usb_voltage_candidate_uv,usb_current_candidate_ua,event_type,details\\n")
+        writer.write(RecorderCsv.encodeRow(listOf("record_type","timestamp_ms","elapsed_realtime_ms","battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua","event_type","details")))
         val sampleNames = listOf("battery_percent","battery_status","plug_type","battery_voltage_mv","battery_current_ua","battery_average_current_ua","charge_counter_uah","energy_counter_nwh","temperature_c","battery_health","technology","screen_on","foreground_package","usage_access","power_supply_json","usb_voltage_candidate_uv","usb_current_candidate_ua")
         readableDatabase.rawQuery("SELECT * FROM samples ORDER BY timestamp_ms", null).use { samples ->
             readableDatabase.rawQuery("SELECT timestamp_ms,event_type,details FROM events ORDER BY timestamp_ms", null).use { events ->
@@ -1035,7 +1035,7 @@ class RecorderDatabase(context: Context) :
                         )
                         sampleNames.forEach { fields += value(samples, it) }
                         fields += listOf("", "")
-                        writer.write(fields.joinToString(",") { csv(it) } + "\\n")
+                        writer.write(RecorderCsv.encodeRow(fields))
                         hasSample = samples.moveToNext()
                     } else {
                         val fields = listOf("EVENT", events.getLong(0).toString(), "") +
