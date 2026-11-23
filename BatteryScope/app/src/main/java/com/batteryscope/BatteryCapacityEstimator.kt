@@ -54,7 +54,7 @@ internal object BatteryCapacityEstimator {
 
         for (sample in ordered) {
             val mode = mode(sample)
-            val valid = sample.percent?.let { it in 1..99 } == true && sample.chargeCounterUah != null && mode != null
+            val valid = sample.bootCount != null && sample.percent?.let { it in 1..99 } == true && sample.chargeCounterUah != null && mode != null
             if (!valid) {
                 flush()
                 continue
