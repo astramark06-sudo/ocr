@@ -733,7 +733,7 @@ class RecorderDatabase(context: Context) :
         var intervalTotal = 0L
         var previous: Row? = null
         readableDatabase.rawQuery(
-            "SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
+            "SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package,boot_count FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
             arrayOf(from.toString())
         ).use { cursor ->
             while (cursor.moveToNext()) {
