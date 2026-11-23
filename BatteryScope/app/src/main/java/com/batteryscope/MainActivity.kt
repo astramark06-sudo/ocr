@@ -805,14 +805,6 @@ class MainActivity : Activity() {
         return result to powerSupplyRootVisible
     }
 
-    companion object {
-        private const val SYSFS_UI_REFRESH_MS = 15_000L
-        private const val SHIZUKU_REQUEST_CODE = 4101
-        private const val CSV_EXPORT_REQUEST_CODE = 5101
-        private const val NOTIFICATION_REQUEST_CODE = 5102
-        private const val LINK_POLL_INTERVAL_MS = 2_000L
-    }
-
     private fun buildMeasurementDiagnosis(nodes: Map<String, String>, powerSupplyRootVisible: Boolean): String {
         val lines = mutableListOf<String>()
         lines += "AUTOMATIC MEASUREMENT ACCESS DIAGNOSIS"
@@ -1186,8 +1178,9 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val SYSFS_UI_REFRESH_MS = 15_000L
         private const val SHIZUKU_REQUEST_CODE = 4102
-        private const val LINK_POLL_INTERVAL_MS = 2000L
+        private const val LINK_POLL_INTERVAL_MS = 2_000L
         private const val CSV_EXPORT_REQUEST_CODE = 5101
         private const val NOTIFICATION_REQUEST_CODE = 5102
     }
