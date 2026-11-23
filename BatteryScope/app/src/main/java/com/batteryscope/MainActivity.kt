@@ -698,29 +698,35 @@ class MainActivity : Activity() {
         null
     }
 
+    /** Enumerates read-only kernel power, USB-C, PD, thermal and hwmon class attributes. */
     private fun readSupplyNodes(): Pair<Map<String, String>, Boolean> {
-        val root = File("/sys/class/power_supply")
-        val dirs = try { root.listFiles() } catch (_: Throwable) { null }
-            ?: return Pair(emptyMap(), false)
+        val roots = linkedMapOf("power_supply" to "/sys/class/power_supply", "typec" to "/sys/class/typec", "usb_power_delivery" to "/sys/class/usb_power_delivery", "dual_role_usb" to "/sys/class/dual_role_usb", "usb_role" to "/sys/class/usb_role", "thermal" to "/sys/class/thermal", "hwmon" to "/sys/class/hwmon")
         val result = linkedMapOf<String, String>()
         val excluded = setOf("device", "subsystem", "driver", "power", "firmware_node", "of_node")
-        for (dir in dirs.sortedBy { it.name }) {
-            if (!dir.isDirectory) continue
-            val attributes = try { dir.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null } ?: continue
-            for (file in attributes) {
-                if (file.name in excluded || !file.isFile) continue
-                val value = try {
-                    if (!file.canRead()) "READ_DENIED"
-                    else file.inputStream().bufferedReader().use { it.readLine()?.trim()?.take(240) ?: "EMPTY" }
-                } catch (t: Throwable) {
-                    "ERROR:${t.javaClass.simpleName}:${t.message ?: "unknown"}".take(240)
+        var visibleRoots = 0
+        for ((prefix, rootPath) in roots) {
+            val root = File(rootPath)
+            if (!root.exists()) continue
+            val dirs = try { root.listFiles()?.sortedBy { it.name } } catch (_: Throwable) { null }
+            if (dirs == null) { result["@diagnostic/" + prefix + "/root"] = "LIST_DENIED"; continue }
+            visibleRoots++
+            for (dir in dirs) {
+                if (result.size >= 1200) break
+                if (dir.name in excluded) continue
+                val attrs = try { if (dir.isDirectory) dir.listFiles()?.sortedBy { it.name } else listOf(dir) } catch (_: Throwable) { null }
+                if (attrs == null) { result["@diagnostic/" + prefix + "/" + dir.name] = "LIST_DENIED"; continue }
+                for (file in attrs) {
+                    if (result.size >= 1200) break
+                    if (file.name in excluded || !file.isFile) continue
+                    val value = try { if (!file.canRead()) "READ_DENIED" else file.inputStream().bufferedReader().use { it.readLine()?.trim()?.take(240) ?: "EMPTY" } } catch (t: Throwable) { "ERROR:" + t.javaClass.simpleName + ":" + (t.message ?: "unknown") }
+                    val key = if (prefix == "power_supply") dir.name + "/" + file.name else prefix + "/" + dir.name + "/" + file.name
+                    result[key] = value
                 }
-                result["${dir.name}/${file.name}"] = value
             }
         }
-        return Pair(result, true)
+        result["@diagnostic/visible_roots"] = visibleRoots.toString()
+        return Pair(result, visibleRoots > 0)
     }
-
     private fun readSnapshot(): Reading {
         val intent = batteryIntent()
         val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
