@@ -695,16 +695,22 @@ class RecorderDatabase(context: Context) :
         var longestMs = 0L
         var intervals = 0L
         var intervalTotal = 0L
-        var previous: Long? = null
+        var previous: Row? = null
         readableDatabase.rawQuery(
-            "SELECT timestamp_ms FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
+            "SELECT timestamp_ms,elapsed_realtime_ms,battery_percent,battery_status,plug_type,charge_counter_uah,screen_on,foreground_package FROM samples WHERE timestamp_ms>=? ORDER BY timestamp_ms",
             arrayOf(from.toString())
         ).use { cursor ->
             while (cursor.moveToNext()) {
-                val timestamp = cursor.getLong(0)
+                val current = Row(
+                    cursor.getLong(0), cursor.getLong(1),
+                    if (cursor.isNull(2)) null else cursor.getInt(2),
+                    cursor.getString(3) ?: "UNKNOWN", cursor.getString(4) ?: "NONE",
+                    if (cursor.isNull(5)) null else cursor.getLong(5),
+                    cursor.getInt(6) == 1, cursor.getString(7) ?: ""
+                )
                 val before = previous
                 if (before != null) {
-                    val dt = timestamp - before
+                    val dt = sampleIntervalMs(before, current)
                     if (dt > 0L) {
                         intervals++
                         intervalTotal += dt
@@ -715,16 +721,15 @@ class RecorderDatabase(context: Context) :
                         }
                     }
                 }
-                previous = timestamp
+                previous = current
             }
         }
         val average = if (intervals > 0L) (intervalTotal / intervals).toString() + " ms" else "n/a"
         return gaps.toString() + " gaps >90s • uncovered estimate " + durationText(missingMs) +
             " • longest gap " + durationText(longestMs) + " • average interval " + average +
-            " (gap cause cannot be inferred from timestamps alone)"
+            " (uses monotonic time when samples are within the same boot; wall time across reboot; exact gap cause is unknown)"
     }
 
-    /** Prefer monotonic elapsedRealtime within a boot; fall back to wall time across a reboot. */
     private fun sampleIntervalMs(before: Row, after: Row): Long {
         val monotonicDelta = after.elapsed - before.elapsed
         return if (monotonicDelta > 0L) monotonicDelta else after.time - before.time
