@@ -78,7 +78,7 @@ class MainActivity : Activity() {
         "constant_charge_current_max", "constant_charge_voltage_max",
         "charge_control_limit", "charge_control_limit_max",
         "charge_control_start_threshold", "charge_control_end_threshold",
-        "current_limit", "voltage_limit", "max_voltage", "max_current", "cool_down",
+        "current_limit", "voltage_limit", "max_voltage", "max_current",
         "fastcharger", "fast_chg_type", "voocchg_ing", "charge_technology", "adapter_fw_update", "mmi_charging_enable", "stop_charging_enable", "chargerid_volt", "charger_ic", "usb_status", "typec_cc_orientation", "typec_sbu_voltage"
     )
 
@@ -95,7 +95,6 @@ class MainActivity : Activity() {
         handler.post(sampler)
         updateRecorderControls()
         refreshHistoryDisplay(true)
-        refreshCapacityDisplay()
     }
 
     override fun onPause() {
@@ -143,7 +142,7 @@ class MainActivity : Activity() {
         capacityText.text = "Capacity estimate not available yet. Record several charging/discharging sessions with the recorder enabled."
 
         val note = makeText(11f, Color.rgb(155, 170, 191), false).apply {
-            text = "Measurement rules: battery current is not USB input current. Only USB/charger supply nodes can report charger-side voltage/current. BatteryScope does not decode the proprietary SuperDart wire handshake or alter the selected USB protocol. The optional Oplus control is available only when the exact bounded kernel interface is present and writable."
+            text = "Measurement rules: battery current is not USB input current. Only USB/charger supply nodes can report charger-side voltage/current. BatteryScope does not decode the proprietary SuperDart wire handshake, alter the selected USB protocol or write charging controls."
             setPadding(2, 12, 2, 16)
         }
         content.addView(note)
@@ -571,6 +570,7 @@ class MainActivity : Activity() {
         val now = System.currentTimeMillis()
         if (!force && now - historyUpdatedAtMs < 300_000L) return
         historyUpdatedAtMs = now
+        refreshCapacityDisplay()
         historyLoadInFlight = true
         Thread {
             var database: RecorderDatabase? = null
