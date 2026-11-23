@@ -47,7 +47,8 @@ The new Battery Health panel estimates full-charge capacity from charge-counter 
 - Source changes for version 1.14 / versionCode 15 have been committed to branch `batteryscope`.
 - Capacity estimator unit tests cover nominal capacity, small-SOC-change rejection, counter-direction mismatch and missing boot-count rejection.
 - Battery rate math unit tests cover battery-side mA calculations and SOC time forecasts.
-- CI build and unit-test status for version 1.14: pending external workflow verification.
+- Source-level checks completed: no Shizuku/privileged service references in MainActivity, recorder service, manifest or Gradle dependencies; CSV header/sample/event row alignment verified at 27 fields; isolated Kotlin arithmetic checks passed for battery-side mA and SOC forecasts.
+- Full Android Gradle build and repository JVM test suite: pending GitHub Actions verification. The local execution environment has no Android SDK/Gradle installation, and the connected GitHub status endpoint returned no status entries for the inspected source commit.
 - APK artifact and SHA-256 for version 1.13: not yet verified.
 - No install or runtime test has been performed on the physical RMX2161.
 - Actual charge-counter availability and capacity-estimate accuracy on this handset remain unverified.
