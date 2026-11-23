@@ -347,6 +347,15 @@ class MainActivity : Activity() {
         val keepAwake = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
             .getBoolean(BatteryRecorderService.KEY_KEEP_CPU_AWAKE, true)
         lines += "Recorder screen-off mode: " + if (keepAwake) "continuous CPU wake lock enabled (more complete sampling; adds app drain)" else "low-impact mode; CPU may suspend and create screen-off gaps"
+        val recorderPrefs = getSharedPreferences(BatteryRecorderService.PREFS, MODE_PRIVATE)
+        val bootResumeFailure = recorderPrefs.getString(BatteryRecorderService.KEY_BOOT_RESUME_FAILURE, null)
+        if (!bootResumeFailure.isNullOrBlank()) {
+            val failedAt = recorderPrefs.getLong(BatteryRecorderService.KEY_BOOT_RESUME_FAILURE_AT, 0L)
+            lines += "Last automatic boot-resume failure: " + bootResumeFailure +
+                if (failedAt > 0L) " at " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(failedAt)) else ""
+        } else {
+            lines += "Last automatic boot-resume failure: none recorded"
+        }
         val nonSupplyRoots = setOf("typec", "usb_power_delivery", "dual_role_usb", "usb_role", "thermal", "hwmon", "@diagnostic")
         val supplies = nodes.keys.filter { !it.startsWith("@") && it.substringBefore("/") !in nonSupplyRoots }
             .map { it.substringBefore("/") }.distinct()
