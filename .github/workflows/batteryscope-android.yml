@@ -61,6 +61,7 @@ jobs:
           grep -q "package: name='com.batteryscope'" apk-badging.txt
           grep -q "versionCode='15'" apk-badging.txt
           sha256sum "$APK" | tee apk-sha256.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee apk-signing.txt
           stat -c 'APK size: %s bytes' "$APK"
 
       - name: Upload APK and verification reports
@@ -73,5 +74,6 @@ jobs:
             BatteryScope/app/build/reports/tests/testDebugUnitTest/
             BatteryScope/apk-badging.txt
             BatteryScope/apk-sha256.txt
+            BatteryScope/apk-signing.txt
           if-no-files-found: error
           retention-days: 14
