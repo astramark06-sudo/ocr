@@ -21,7 +21,7 @@ Package: `com.batteryscope`
 ## Current implementation
 
 ### Live telemetry
-- Android battery percentage, status, plugged source, voltage, temperature, health enum, technology.
+- Android battery percentage, status, plugged source, voltage, temperature, health enum, technology. Percentage is computed only from a valid Android EXTRA_LEVEL/EXTRA_SCALE pair; no default scale is invented.
 - BatteryManager instantaneous and average battery-side current, charge counter and energy counter.
 - Optional kernel fuel-gauge charge_full/design-capacity ratio and cycle_count when readable, kept separate from empirical capacity estimate.
 - Charger-advertised maximum current/voltage, battery-present state, invalid-charger flag and optional cycle-count metadata when Android/OEM extras expose them.
