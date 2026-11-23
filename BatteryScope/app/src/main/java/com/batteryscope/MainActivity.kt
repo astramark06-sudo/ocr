@@ -333,6 +333,11 @@ class MainActivity : Activity() {
         historyButtons.addView(usageButton, LinearLayout.LayoutParams(0, -2, 1f))
         historyButtons.addView(exportButton, LinearLayout.LayoutParams(0, -2, 1f))
         content.addView(historyButtons)
+        val batterySettingsButton = Button(this).apply {
+            text = "Battery optimisation settings"
+            setOnClickListener { openBatteryOptimisationSettings() }
+        }
+        content.addView(batterySettingsButton, LinearLayout.LayoutParams(-1, -2))
 
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -996,6 +1001,14 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         } catch (t: Throwable) {
             statusText.text = "Could not open Usage Access settings: " + (t.message ?: "unknown")
+        }
+    }
+
+    private fun openBatteryOptimisationSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (t: Throwable) {
+            statusText.text = "Could not open battery optimisation settings: " + (t.message ?: "unknown")
         }
     }
 
