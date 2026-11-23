@@ -100,3 +100,12 @@ All versions are debug APK development builds unless a signed release is explici
 - Per-app history now includes coincident charge-counter mAh movement when valid, explicitly labelled as foreground correlation rather than direct app power measurement.
 
 - Added per-property BatteryManager access diagnostics and persisted access-status transitions; battery percentage now requires valid level/scale metadata and reports the exact missing/invalid input.
+
+
+## 2026-11-23 — RMX2161 CSV field-validation findings
+
+- Reviewed first user-exported history file (22 samples, 51 events, 13m35.654s).
+- Found voltage values 3–4 in the `battery_voltage_mv` field and current values 14–674 in `battery_current_ua`; existing UI scaling cannot produce a valid voltage/power result from this export.
+- Charge-counter endpoint movement implies ~595.8 mA average, but 45,000 µAh quantization and OEM/API unit uncertainty prevent a safe inferred multiplier.
+- No charging session was present; USB input watts remain unvalidated. Average current, energy counter, cycle count, charger limits and USB V/I candidates were unavailable.
+- No source conversion changed in this update. Raw values are preserved; calibration/semantic validation is required before correcting units.
