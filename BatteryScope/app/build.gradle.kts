@@ -9,8 +9,8 @@ android {
         applicationId = "com.batteryscope"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.14"
+        versionCode = 16
+        versionName = "1.15"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
