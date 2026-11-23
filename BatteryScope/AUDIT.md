@@ -228,3 +228,14 @@ Release acceptance requires:
 - This milestone does not yet calculate complete per-session time-to-50/80/90/100/full, 100-to-20/10/empty or robust charger-vs-usage comparisons. Those require session segmentation and milestone interpolation over the stored history.
 - App foreground intervals are not app energy attribution.
 - USB sysfs values are candidate source telemetry only; the exact RMX2161 path and driver units must be verified on-device.
+
+
+### v1.10 recorder updates
+- The foreground service owns sampling on a dedicated HandlerThread and is independent of MainActivity lifecycle.
+- Core framework telemetry is sampled every 30 seconds; class-tree sysfs inventories are refreshed every 120 seconds.
+- A partial wake lock is held while recording to reduce CPU-suspend gaps. This raises the app's own power consumption and is disclosed in the notification and event log; it is released when recording stops or the service is destroyed.
+- If Shizuku is already started and BatteryScope has been granted permission, the recorder can bind a separate read-only Shizuku UserService and persist periodic privileged snapshots. If the user grants Shizuku permission after recording starts, running the power-path audit in the UI asks the recorder to bind.
+- Shizuku telemetry is best-effort and stops when Shizuku is killed or permission is revoked. Ordinary app telemetry continues.
+- History summary windows: 24 hours, 7 days, 30 days and 90 days. Raw sample/event rows remain stored locally and can be exported.
+- Session analytics report charge/discharge rates, screen-on/off rates, charge-counter deltas, recent-session duration and percentage threshold times. Estimates are explicitly marked; gaps over 90 seconds are excluded from interval rates.
+- Foreground app attribution uses Usage Access and adjacent samples. Coincident discharge is correlated/estimated; it is not a direct per-app electrical measurement.
