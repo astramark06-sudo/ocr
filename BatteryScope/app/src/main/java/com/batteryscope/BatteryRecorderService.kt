@@ -184,6 +184,7 @@ class BatteryRecorderService : Service() {
 
     private fun acquireSamplingWakeLock() {
         try {
+            if (samplingWakeLock?.isHeld == true) return
             val power = getSystemService(POWER_SERVICE) as PowerManager
             val lock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BatteryScope::ContinuousRecorder")
             lock.setReferenceCounted(false)
@@ -736,7 +737,7 @@ class RecorderDatabase(context: Context) :
         else out.appendLine("Charge-counter rate: unavailable")
         out.appendLine("Screen ON: " + durationText(onMs) + " • screen OFF: " + durationText(offMs))
         val thresholds = if (wantCharge) listOf(50, 80, 90, 100) else listOf(80, 50, 20, 10, 0)
-        out.appendLine(if (wantCharge) "Time from session start to charge thresholds:" else "Time from session start to discharge thresholds:")
+        out.appendLine(if (wantCharge) "Time from first recorded sample in this session to charge thresholds:" else "Time from first recorded sample in this session to discharge thresholds:")
         for (threshold in thresholds) {
             val crossing = thresholdTime(run, threshold, wantCharge)
             val status = when {
