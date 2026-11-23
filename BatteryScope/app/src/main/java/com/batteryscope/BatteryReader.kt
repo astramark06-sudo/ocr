@@ -29,7 +29,7 @@ class BatteryReader(context: Context) {
             intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0),
             intent.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN),
             temp, voltage, intent.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "Unknown",
-            current, counter, 4500
+            current, counter
         )
     }
 }
