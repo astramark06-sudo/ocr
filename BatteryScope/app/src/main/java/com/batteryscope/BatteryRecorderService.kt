@@ -584,10 +584,13 @@ class RecorderDatabase(context: Context) :
                 appendLine("Charging: " + stats.chargeHours + " h • +" + stats.chargedPct + " percentage points • " + stats.chargeRate + " %/h")
                 appendLine("Discharging: " + stats.dischargeHours + " h • -" + stats.dischargedPct + " percentage points • " + stats.dischargeRate + " %/h")
                 appendLine("Charge-counter gain/loss: +" + stats.chargeGainMah + " / -" + stats.chargeLossMah + " mAh (Android estimate)")
+                appendLine("Average battery-side charge rate from counter: " + stats.chargeCounterRateMa + " mA • discharge rate: " + stats.dischargeCounterRateMa + " mA (not USB input current)")
                 appendLine("Charging screen ON: " + stats.chargeOnHours + " h • +" + stats.chargeOnPct + "% • " + stats.chargeOnRate + " %/h")
                 appendLine("Charging screen OFF: " + stats.chargeOffHours + " h • +" + stats.chargeOffPct + "% • " + stats.chargeOffRate + " %/h")
+                appendLine("Charging rate comparison: screen ON " + stats.chargeOnRate + " %/h vs screen OFF " + stats.chargeOffRate + " %/h (historical averages)")
                 appendLine("Discharging screen ON: " + stats.drainOnHours + " h • -" + stats.drainOnPct + "% • " + stats.drainOnRate + " %/h")
                 appendLine("Discharging screen OFF: " + stats.drainOffHours + " h • -" + stats.drainOffPct + "% • " + stats.drainOffRate + " %/h")
+                appendLine("Discharge rate comparison: screen ON " + stats.drainOnRate + " %/h vs screen OFF " + stats.drainOffRate + " %/h (historical averages)")
                 appendLine("Battery decline while Android reports CHARGING or both samples show a connected source: " + stats.pluggedDrainHours + " h • -" + stats.pluggedDrainPct + "% • " + stats.pluggedDrainRate + " %/h")
                 appendLine("  Plugged decline screen ON: " + stats.pluggedDrainOnHours + " h • -" + stats.pluggedDrainOnPct + "% • " + stats.pluggedDrainOnRate + " %/h")
                 appendLine("  Plugged decline screen OFF: " + stats.pluggedDrainOffHours + " h • -" + stats.pluggedDrainOffPct + "% • " + stats.pluggedDrainOffRate + " %/h")
@@ -646,7 +649,8 @@ class RecorderDatabase(context: Context) :
         val pluggedDrainHours: String, val pluggedDrainPct: String, val pluggedDrainRate: String,
         val pluggedDrainOnHours: String, val pluggedDrainOnPct: String, val pluggedDrainOnRate: String,
         val pluggedDrainOffHours: String, val pluggedDrainOffPct: String, val pluggedDrainOffRate: String,
-        val screenOn: Int, val screenOff: Int, val apps: List<AppMetric>
+        val screenOn: Int, val screenOff: Int, val apps: List<AppMetric>,
+        val chargeCounterRateMa: String, val dischargeCounterRateMa: String
     )
 
     private fun readWindow(from: Long): List<Row> {
@@ -820,7 +824,9 @@ class RecorderDatabase(context: Context) :
             screenOn, screenOff,
             appTime.entries.sortedByDescending { it.value }.map {
                 AppMetric(it.key, it.value, appCharge[it.key] ?: 0.0, appDrain[it.key] ?: 0.0, appPluggedDrain[it.key] ?: 0.0)
-            }
+            },
+            if (charge.ms > 0L) fmt(charge.chargeCounterUah / 1000.0 / hours(charge)) else "n/a",
+            if (drain.ms > 0L) fmt(drain.chargeCounterUah / 1000.0 / hours(drain)) else "n/a"
         )
     }
 
