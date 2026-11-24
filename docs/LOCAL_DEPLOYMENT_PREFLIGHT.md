@@ -41,11 +41,11 @@ The Python CLI, model router, MCP client and observability helper load the local
 
 ## 2. Private research data
 
-- Keep the evidence bundle and workbook in a private local directory, not the public repository.
-- Extract the separate read-only SQLite workbench bundle for inspection; do not use it as a write target.
+- Keep the replacement screenshot archive and its fresh outputs in a private local directory, not the public repository.
+- Do not load earlier laptop source bundles, workbooks or SQLite snapshots.
 - For a new import/reprocessing run, copy the source CSV batch to a versioned private input directory and preserve that input directory unchanged.
 - Save the import report and a SHA-256 manifest beside the batch.
-- Import into a new database or a verified backup copy first. The canonical importer upserts by key; reusing a key replaces its stored payload.
+- Import into a new database for this source generation. The canonical importer upserts by key; reusing a key replaces its stored payload.
 - Do not load screenshots or private OCR files into GitHub issues, Actions artifacts, public logs or model-provider prompts unless the destination has been explicitly reviewed.
 
 See [Laptop dataset runbook](LAPTOP_DATASET_RUNBOOK.md) and [Research fact schema](RESEARCH_FACT_SCHEMA.md).

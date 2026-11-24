@@ -28,7 +28,7 @@ Limits below were checked against the providers' official documentation on 2026-
 
 ## Recommended order
 
-1. **Now:** use local SQLite and existing Airtable/GitHub connectors for operations metadata. The user already has a local-first workbench and connected operational tracking.
+1. **Now:** use local SQLite and existing Airtable/GitHub connectors for operations metadata. Keep new laptop data separate from superseded snapshots.
 2. **Only when remote synchronization is needed:** evaluate Neon Free as the first Postgres candidate. Start with non-sensitive metadata, confirm project region and connection policy, use a restricted database role and keep a private local backup.
 3. **Only when an HTTP endpoint is needed:** evaluate Cloudflare Workers Free as a thin stateless API. Apply authentication, rate limits, input-size limits and request logging that excludes private payloads.
 4. **Use Supabase instead of Neon** only when its bundled Auth, file storage or Realtime features are needed enough to justify its smaller database allowance and inactivity pause.

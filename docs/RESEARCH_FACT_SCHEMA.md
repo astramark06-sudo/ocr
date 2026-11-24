@@ -1,6 +1,6 @@
 # Research Fact and Price Evidence Schema
 
-Use this convention for future laptop-spec and price enrichment. It is a documentation contract for new research rows; it does not imply that every historical row already contains every field.
+Use this convention for future laptop-spec and price enrichment. It is a documentation contract for new research rows; it applies to newly generated research rows only.
 
 ## 1. Identity hierarchy
 
