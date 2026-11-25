@@ -31,3 +31,13 @@ python scripts/flipkart/append-live-sheet.py "$baseline" "$tmp/live.xlsx" "$outp
 In the shortlist trial, six distinct product pages yielded five retailer part-number fields. One of those fields listed two possible part numbers, and the sixth page remained unresolved. The result-card import alone could not establish those fields.
 
 Use Work mode for the connected browser session and saved workbook writeback. Pass a compact evidence table and the unresolved queue to normal ChatGPT for comparison and recommendations. Keep per-listing results and workbook files outside this public repository.
+
+## Resume a saved research checkpoint
+
+Run the read-only queue builder against the latest private checkpoint, not an older capture:
+
+```sh
+node scripts/flipkart/research-queue.mjs /private/checkpoint.json /private/research-queue.json 55000
+````
+
+The output separates manufacturer-reference candidates, rows needing model/part identification, out-of-budget rows and unknown-price rows. The browser queue groups by PID, retains all affected listing IDs and reasons, prioritizes reviewed conflicts, and strips tracking parameters from valid captured Flipkart links. An empty URL list means the PID needs a manually verified link; never fabricate one. A candidate is not a confirmed model assignment. The builder does not change the source checkpoint or Excel workbook, does not make network calls, and refuses to overwrite the output. Keep both input and output private. Run this again only when a new verified checkpoint exists or the budget changes.
