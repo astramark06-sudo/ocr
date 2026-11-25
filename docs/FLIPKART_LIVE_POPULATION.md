@@ -19,3 +19,15 @@ python scripts/flipkart/append-live-sheet.py "$baseline" "$tmp/live.xlsx" "$outp
 - Capture the displayed selling price separately from screenshot evidence, MRP, card discounts, exchange offers and EMI. Keep an empty price if the regular card price cannot be parsed. A truncated title or a missing field calls for verification from the product page.
 - The live filter and the comparison budget are independent. The live tab adds current evidence while preserving the original sheet, formulas, cached values, table and screenshot prices. To refresh, use the original one-sheet baseline to produce a new output.
 - Keep captures, screenshots, workbook files, tracking links and account details in private storage. Commit reusable code and documentation only.
+
+## Verify exact models on product pages
+
+1. Start from the current workbook and unresolved listing IDs. Use the captured product links and group repeat observations by PID to avoid opening the same product twice. Prioritize the shortlist and compare CPU, RAM, storage, and model family before mapping a retailer PID to a screenshot row. Leave ambiguous matches open.
+2. In the connected Work browser, open the existing product link in a separate tab and verify the resulting PID and selected configuration. Wait for the Specifications section and, where present, the Model Number and Part Number rows. Flipkart can render these after the page title and highlights appear. An early empty snapshot is insufficient to mark a field unavailable.
+3. Read label/value pairs from the visible Specifications section. Collect only relevant fields, such as Model Number, Part Number, Processor Variant, RAM, RAM Type, SSD Capacity, Screen Size, Screen Resolution, Battery Cell, and Weight. Keep the source URL with PID, observation date, and matched workbook listing IDs in the private handoff. Exclude account, delivery-location, and cart data.
+4. Record the retailer model number and part number as separate fields. When one PID lists multiple part numbers, retain them as alternatives and leave the exact delivered part unresolved. Keep the original screenshot price separate from any product-page selling price, fee, or offer. Use an exact part number for manufacturer-spec joins.
+5. Checkpoint verified evidence and unresolved IDs before ending the session. Record whether the findings have been written to Excel. Prioritize remaining blanks and ambiguous matches on resume, without reopening pages whose evidence still applies.
+
+In the shortlist trial, six distinct product pages yielded five retailer part-number fields. One of those fields listed two possible part numbers, and the sixth page remained unresolved. The result-card import alone could not establish those fields.
+
+Use Work mode for the connected browser session and saved workbook writeback. Pass a compact evidence table and the unresolved queue to normal ChatGPT for comparison and recommendations. Keep per-listing results and workbook files outside this public repository.
