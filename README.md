@@ -101,6 +101,8 @@ Dataset import is idempotent for a stable key field. Private datasets stay local
 
 ## Laptop research operations
 
+- [Populate Excel from a filtered Flipkart search](docs/FLIPKART_LIVE_POPULATION.md)
+
 The current laptop analysis starts from the replacement private screenshot archive only; prior laptop evidence and derived datasets are superseded. Do not add its screenshots, workbook, CSVs, SQLite database or generated exports to this public repository.
 
 - [Laptop dataset runbook](docs/LAPTOP_DATASET_RUNBOOK.md): process only the replacement evidence, import fresh compatible CSV batches, and run coverage checks.
